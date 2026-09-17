@@ -1,18 +1,23 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAdminMessaging } from "./_firebase.js";
 
+const MAX_TOKEN_LENGTH = 4096;
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  if (request.method !== "POST")
+  if (request.method !== "POST") {
     return response.status(405).json({ error: "Method not allowed" });
+  }
+
   const token =
     typeof request.body?.token === "string" ? request.body.token : "";
-  if (!token || token.length > 4096)
+  if (!token || token.length > MAX_TOKEN_LENGTH) {
     return response
       .status(400)
       .json({ error: "A valid device token is required" });
+  }
 
   try {
     await getAdminMessaging().subscribeToTopic([token], "signal-lab");

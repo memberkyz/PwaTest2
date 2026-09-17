@@ -2,22 +2,30 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomUUID } from "node:crypto";
 import { getAdminMessaging } from "./_firebase.js";
 
+const DEFAULT_MESSAGE = "This is a notification test from Signal Lab.";
+const DEFAULT_SENDER = "Unnamed device";
+const MAX_MESSAGE_LENGTH = 240;
+const MAX_SENDER_LENGTH = 40;
+
 export default async function handler(
   request: VercelRequest,
   response: VercelResponse,
 ) {
-  if (request.method !== "POST")
+  if (request.method !== "POST") {
     return response.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
-    const message =
+    const requestedMessage =
       typeof request.body?.message === "string"
-        ? request.body.message.trim().slice(0, 240)
-        : "This is a notification test from Signal Lab.";
-    const sender =
+        ? request.body.message.trim().slice(0, MAX_MESSAGE_LENGTH)
+        : "";
+    const requestedSender =
       typeof request.body?.sender === "string"
-        ? request.body.sender.trim().slice(0, 40)
-        : "Unnamed device";
+        ? request.body.sender.trim().slice(0, MAX_SENDER_LENGTH)
+        : "";
+    const message = requestedMessage || DEFAULT_MESSAGE;
+    const sender = requestedSender || DEFAULT_SENDER;
     const eventId = randomUUID();
     const sentAt = new Date().toISOString();
     await getAdminMessaging().send({
@@ -27,7 +35,7 @@ export default async function handler(
         sentAt,
         title: `Signal Lab · from ${sender}`,
         body: `${message} | ID ${eventId.slice(0, 8)} | ${sentAt} UTC`,
-        url: process.env.APP_URL || "https://example.com",
+        url: process.env.APP_URL || "/",
       },
     });
     return response.status(200).json({

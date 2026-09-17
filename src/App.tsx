@@ -15,6 +15,19 @@ interface InstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+interface ApiResponse {
+  message?: string;
+  error?: string;
+}
+
+async function readApiResponse(response: Response): Promise<ApiResponse> {
+  try {
+    return (await response.json()) as ApiResponse;
+  } catch {
+    return {};
+  }
+}
+
 function App() {
   const [isOn, setIsOn] = useState(false);
   const [deviceReady, setDeviceReady] = useState(false);
@@ -45,14 +58,18 @@ function App() {
       setStatus("Chrome menu → Install Signal Lab");
       return;
     }
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    setStatus(
-      choice.outcome === "accepted"
-        ? "Signal Lab installed"
-        : "Install cancelled",
-    );
-    setInstallPrompt(null);
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      setStatus(
+        choice.outcome === "accepted"
+          ? "Signal Lab installed"
+          : "Install cancelled",
+      );
+      setInstallPrompt(null);
+    } catch {
+      setStatus("Could not open the install prompt");
+    }
   }
 
   useEffect(() => {
@@ -70,17 +87,21 @@ function App() {
   useEffect(() => {
     if (!messaging) return;
     return onMessage(messaging, async (payload) => {
-      const data = payload.data ?? {};
-      const registration = await navigator.serviceWorker.ready;
-      await registration.showNotification(data.title ?? "Signal Lab test", {
-        body: data.body ?? "A test notification arrived.",
-        icon: "/icon-192.svg",
-        tag: data.eventId ? `signal-${data.eventId}` : undefined,
-        data: { url: data.url ?? "/", eventId: data.eventId ?? "unknown" },
-      });
-      setStatus(
-        `Notification received · ID ${(data.eventId ?? "unknown").slice(0, 8)}`,
-      );
+      try {
+        const data = payload.data ?? {};
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(data.title ?? "Signal Lab test", {
+          body: data.body ?? "A test notification arrived.",
+          icon: "/icon-192.svg",
+          tag: data.eventId ? `signal-${data.eventId}` : undefined,
+          data: { url: data.url ?? "/", eventId: data.eventId ?? "unknown" },
+        });
+        setStatus(
+          `Notification received · ID ${(data.eventId ?? "unknown").slice(0, 8)}`,
+        );
+      } catch {
+        setStatus("Could not display the incoming notification");
+      }
     });
   }, []);
 
@@ -116,12 +137,13 @@ function App() {
       setStatus("This browser does not support web notifications");
       return;
     }
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      setStatus("Notification permission was not granted");
-      return;
-    }
+    setBusy(true);
     try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setStatus("Notification permission was not granted");
+        return;
+      }
       const registration = await navigator.serviceWorker.register(
         "/firebase-messaging-sw.js",
       );
@@ -144,6 +166,8 @@ function App() {
       const detail =
         error instanceof Error ? error.message : "Unknown browser error";
       setStatus(`Could not register device: ${detail.slice(0, 90)}`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -162,10 +186,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message, sender }),
       });
-      const result = (await response.json()) as {
-        message?: string;
-        error?: string;
-      };
+      const result = await readApiResponse(response);
       setStatus(
         response.ok
           ? (result.message ?? "Notification sent")
@@ -301,6 +322,7 @@ function App() {
           className={`register-button ${deviceReady ? "registered" : ""}`}
           type="button"
           onClick={enableNotifications}
+          disabled={busy}
         >
           {deviceReady ? "Device registered ✓" : "Enable notifications →"}
         </button>
