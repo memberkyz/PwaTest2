@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getDatabase } from "firebase/database";
 import { getMessaging, isSupported } from "firebase/messaging";
 
@@ -14,6 +15,8 @@ const config = {
 
 export const firebaseConfigured = Object.values(config).every(Boolean);
 const app = firebaseConfigured ? initializeApp(config) : null;
+export const auth = app ? getAuth(app) : null;
+export const googleProvider = new GoogleAuthProvider();
 export const database = app ? getDatabase(app) : null;
 export const messaging =
   app && typeof window !== "undefined"

@@ -1,14 +1,19 @@
-## Signal Lab
+## Molar/Care Dental Agenda
 
-A small PWA for testing shared state and web push notifications across devices.
+A mobile-first dental practice agenda for Maple Clinic with Google sign-in, a daily two-doctor schedule, week view, and patient directory.
 
 ## Setup
 
-1. Create a Firebase project, enable Realtime Database, Cloud Messaging, and the web app.
-2. Copy `.env.example` to `.env.local` and fill in the Firebase web config and Web Push certificate key.
-3. Put the same Firebase web config into `public/firebase-messaging-sw.js` where the `REPLACE_ME` values are shown.
-4. Create a Firebase service-account JSON value and add it to Vercel as `FIREBASE_SERVICE_ACCOUNT_JSON`. Add the deployed URL as `APP_URL`.
-5. Deploy with `npx vercel` or connect the folder to a Vercel project.
+1. In Firebase Console, open the `pwa-realtime-demo` project and enable Authentication.
+2. Under Authentication -> Sign-in method, enable Google and choose a support email.
+3. Under Authentication -> Settings -> Authorized domains, add `pwa-test2-nine.vercel.app`.
+4. Copy `.env.example` to `.env.local` and fill in the Firebase web config.
+5. Add the same `VITE_FIREBASE_*` values to Vercel Production, Preview, and Development environments.
+6. Deploy with `vercel deploy --prod --yes`.
+
+The current production URL is https://pwa-test2-nine.vercel.app.
+
+Google sign-in cannot work until steps 1-3 are completed in Firebase Console. Before those settings are enabled, Firebase returns `CONFIGURATION_NOT_FOUND`.
 
 The service account is server-only. Never prefix it with `VITE_` and never commit it.
 
@@ -18,8 +23,6 @@ The service account is server-only. Never prefix it with `VITE_` and never commi
 npm run dev
 ```
 
-Push notifications require HTTPS. Use the Vercel preview URL for device testing. On iPhone/iPad, open that URL in Safari, add it to the Home Screen, open the installed PWA, and enable notifications there.
+The production URL is HTTPS and can be tested directly on a phone. On iPhone/iPad, open it in Safari, use Share -> Add to Home Screen, then open the installed PWA.
 
-The current `database.rules.json` intentionally allows access only to `testState` for this private notification test. Add Firebase Authentication and authenticated rules before sharing the URL publicly.
-
-The Web Push certificate key is available in Firebase Console under Project settings, Cloud Messaging, Web configuration. It is required in `VITE_FIREBASE_VAPID_KEY` for device registration.
+The current database rules are still from the original private notification prototype. Before storing real patient data, replace them with authenticated, user-scoped rules and move patient/appointment data from local demo arrays into the database.

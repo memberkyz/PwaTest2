@@ -1,5 +1,15 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://pwa-realtime-demo.firebaseapp.com/__/auth/:path*"
+    },
+    {
+      "source": "/__/firebase/:path*",
+      "destination": "https://pwa-realtime-demo.firebaseapp.com/__/firebase/:path*"
+    }
+  ]
 }

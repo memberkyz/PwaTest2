@@ -66,6 +66,37 @@ main {
   background: #ee5538;
   color: #f8f6f0;
 }
+.account-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+.account-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-button {
+  border: 1px solid #24231f;
+  background: #24231f;
+  color: #f8f6f0;
+  padding: 8px 11px;
+  font:
+    500 11px "DM Mono",
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.auth-button:hover {
+  background: #ee5538;
+  border-color: #ee5538;
+}
 .intro {
   padding: 85px 0 70px;
   max-width: 760px;
@@ -349,6 +380,13 @@ footer {
   }
   .topbar {
     height: 67px;
+  }
+  .account-name {
+    display: none;
+  }
+  .auth-button {
+    padding: 7px 8px;
+    font-size: 10px;
   }
   .connection {
     display: none;

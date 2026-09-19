@@ -1,11 +1,11 @@
 {
-  "name": "Signal Lab",
-  "short_name": "Signal Lab",
-  "description": "A small cross-device notification test console.",
+  "name": "Molar/Care Dental Agenda",
+  "short_name": "Molar/Care",
+  "description": "A simple daily dental practice agenda for Maple Clinic.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f3f0e8",
-  "theme_color": "#f3f0e8",
+  "background_color": "#fbfcfa",
+  "theme_color": "#fbfcfa",
   "icons": [
     { "src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" },
     { "src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml" }

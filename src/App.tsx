@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  type User,
+} from "firebase/auth";
 import { onValue, ref, set } from "firebase/database";
 import { getToken, onMessage } from "firebase/messaging";
 import {
   database,
+  auth,
   firebaseConfigured,
   firebaseVapidKey,
   firebaseVapidKeyValid,
+  googleProvider,
   messaging,
 } from "./firebase";
 import "./App.css";
@@ -29,6 +37,8 @@ async function readApiResponse(response: Response): Promise<ApiResponse> {
 }
 
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
   const [isOn, setIsOn] = useState(false);
   const [deviceReady, setDeviceReady] = useState(false);
   const [status, setStatus] = useState("Ready for setup");
@@ -42,6 +52,42 @@ function App() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
     null,
   );
+
+  useEffect(() => {
+    if (!auth) return;
+    return onAuthStateChanged(auth, setUser);
+  }, []);
+
+  async function signInWithGoogle() {
+    if (!auth) {
+      setStatus("Add Firebase config before signing in");
+      return;
+    }
+    setAuthBusy(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      setStatus("Signed in with Google");
+    } catch (error) {
+      const code =
+        error instanceof Error ? error.message : "Unknown sign-in error";
+      setStatus(`Google sign-in failed: ${code.slice(0, 80)}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signOutOfGoogle() {
+    if (!auth) return;
+    setAuthBusy(true);
+    try {
+      await signOut(auth);
+      setStatus("Signed out");
+    } catch {
+      setStatus("Could not sign out");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   useEffect(() => {
     const handleInstallPrompt = (event: Event) => {
@@ -210,6 +256,33 @@ function App() {
           <span />
           {firebaseConfigured ? "Firebase ready" : "Preview mode"}
         </span>
+        {user ? (
+          <div className="account-control">
+            {user.photoURL && (
+              <img src={user.photoURL} alt="" className="account-avatar" />
+            )}
+            <span className="account-name">
+              {user.displayName ?? user.email}
+            </span>
+            <button
+              className="auth-button"
+              type="button"
+              onClick={signOutOfGoogle}
+              disabled={authBusy}
+            >
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <button
+            className="auth-button"
+            type="button"
+            onClick={signInWithGoogle}
+            disabled={authBusy}
+          >
+            Sign in with Google
+          </button>
+        )}
         <button className="install-button" type="button" onClick={installApp}>
           Install app ↓
         </button>
