@@ -5,17 +5,8 @@ import {
   signOut,
   type User,
 } from "firebase/auth";
-import { onValue, ref, set } from "firebase/database";
-import { getToken, onMessage } from "firebase/messaging";
-import {
-  database,
-  auth,
-  firebaseConfigured,
-  firebaseVapidKey,
-  firebaseVapidKeyValid,
-  googleProvider,
-  messaging,
-} from "./firebase";
+import { auth, firebaseConfigured, googleProvider } from "./firebase";
+import DentalDashboard, { type DashboardUser } from "./DentalDashboard";
 import "./App.css";
 
 interface InstallPromptEvent extends Event {
@@ -23,31 +14,21 @@ interface InstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-interface ApiResponse {
-  message?: string;
-  error?: string;
-}
-
-async function readApiResponse(response: Response): Promise<ApiResponse> {
-  try {
-    return (await response.json()) as ApiResponse;
-  } catch {
-    return {};
-  }
-}
-
 function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [isOn, setIsOn] = useState(false);
-  const [deviceReady, setDeviceReady] = useState(false);
-  const [status, setStatus] = useState("Ready for setup");
-  const [busy, setBusy] = useState(false);
-  const [deviceName, setDeviceName] = useState(
-    () => localStorage.getItem("signal-lab-device-name") ?? "My device",
+  const [localPreview, setLocalPreview] = useState(
+    () =>
+      import.meta.env.DEV &&
+      sessionStorage.getItem("molar-care-preview") === "true",
   );
-  const [messageText, setMessageText] = useState(
-    "This is a notification test from Signal Lab.",
+  const [authReady, setAuthReady] = useState(() => !auth);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [status, setStatus] = useState("Ready for setup");
+  const [deviceName, setDeviceName] = useState(
+    () => localStorage.getItem("signal-lab-device-name") ?? "",
+  );
+  const [hasNamedDevice, setHasNamedDevice] = useState(() =>
+    Boolean(localStorage.getItem("signal-lab-device-name")?.trim()),
   );
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
     null,
@@ -55,7 +36,10 @@ function App() {
 
   useEffect(() => {
     if (!auth) return;
-    return onAuthStateChanged(auth, setUser);
+    return onAuthStateChanged(auth, (nextUser) => {
+      setUser(nextUser);
+      setAuthReady(true);
+    });
   }, []);
 
   async function signInWithGoogle() {
@@ -77,6 +61,12 @@ function App() {
   }
 
   async function signOutOfGoogle() {
+    if (localPreview) {
+      sessionStorage.removeItem("molar-care-preview");
+      setLocalPreview(false);
+      setStatus("Local preview closed");
+      return;
+    }
     if (!auth) return;
     setAuthBusy(true);
     try {
@@ -89,6 +79,18 @@ function App() {
     }
   }
 
+  function saveDeviceName() {
+    const name = deviceName.trim();
+    if (!name) {
+      setStatus("Give this device a name to continue");
+      return;
+    }
+    localStorage.setItem("signal-lab-device-name", name);
+    setDeviceName(name);
+    setHasNamedDevice(true);
+    setStatus("Device name saved");
+  }
+
   useEffect(() => {
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -99,312 +101,195 @@ function App() {
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
   }, []);
 
-  async function installApp() {
+  async function installApp(): Promise<string> {
     if (!installPrompt) {
-      setStatus("Chrome menu → Install Signal Lab");
-      return;
+      return "Use your browser menu → Add to Home Screen";
     }
     try {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
-      setStatus(
-        choice.outcome === "accepted"
-          ? "Signal Lab installed"
-          : "Install cancelled",
-      );
       setInstallPrompt(null);
+      return choice.outcome === "accepted"
+        ? "App installed"
+        : "Install cancelled";
     } catch {
-      setStatus("Could not open the install prompt");
+      return "Could not open the install prompt";
     }
   }
 
-  useEffect(() => {
-    if (!firebaseConfigured || !database) return;
-    return onValue(
-      ref(database, "testState/isOn"),
-      (snapshot) => {
-        setIsOn(snapshot.val() === true);
-        setStatus("Connected to shared state");
-      },
-      () => setStatus("Could not read shared state"),
+  const previewUser: DashboardUser = {
+    displayName: "Dr. Maya Patel",
+    email: "preview@molar-care.local",
+    photoURL: null,
+  };
+  const activeUser: DashboardUser | null =
+    user ?? (localPreview ? previewUser : null);
+
+  if (!authReady) {
+    return (
+      <main className="auth-loading">
+        <span className="brand-mark">↗</span>
+        <span>Loading Molar/Care</span>
+      </main>
     );
-  }, []);
-
-  useEffect(() => {
-    if (!messaging) return;
-    return onMessage(messaging, async (payload) => {
-      try {
-        const data = payload.data ?? {};
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(data.title ?? "Signal Lab test", {
-          body: data.body ?? "A test notification arrived.",
-          icon: "/icon-192.svg",
-          tag: data.eventId ? `signal-${data.eventId}` : undefined,
-          data: { url: data.url ?? "/", eventId: data.eventId ?? "unknown" },
-        });
-        setStatus(
-          `Notification received · ID ${(data.eventId ?? "unknown").slice(0, 8)}`,
-        );
-      } catch {
-        setStatus("Could not display the incoming notification");
-      }
-    });
-  }, []);
-
-  async function toggleState() {
-    if (!database) {
-      setIsOn((value) => !value);
-      setStatus("Preview mode: add Firebase config to sync devices");
-      return;
-    }
-    setBusy(true);
-    try {
-      await set(ref(database, "testState/isOn"), !isOn);
-      setStatus("Shared state updated");
-    } catch {
-      setStatus("State update failed; check Firebase rules");
-    } finally {
-      setBusy(false);
-    }
   }
 
-  async function enableNotifications() {
-    if (!messaging) {
-      setStatus("Add Firebase config before enabling notifications");
-      return;
-    }
-    if (!firebaseVapidKey || !firebaseVapidKeyValid) {
-      setStatus(
-        "Invalid VAPID key: copy the public key from Firebase Cloud Messaging",
-      );
-      return;
-    }
-    if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-      setStatus("This browser does not support web notifications");
-      return;
-    }
-    setBusy(true);
-    try {
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setStatus("Notification permission was not granted");
-        return;
-      }
-      const registration = await navigator.serviceWorker.register(
-        "/firebase-messaging-sw.js",
-      );
-      await registration.update();
-      await navigator.serviceWorker.ready;
-      const token = await getToken(messaging, {
-        vapidKey: firebaseVapidKey,
-        serviceWorkerRegistration: registration,
-      });
-      if (!token) throw new Error("FCM returned an empty device token");
-      const response = await fetch("/api/register-device", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, deviceName }),
-      });
-      if (!response.ok) throw new Error("registration failed");
-      setDeviceReady(true);
-      setStatus("Notifications enabled on this device");
-    } catch (error) {
-      const detail =
-        error instanceof Error ? error.message : "Unknown browser error";
-      setStatus(`Could not register device: ${detail.slice(0, 90)}`);
-    } finally {
-      setBusy(false);
-    }
+  if (!activeUser) {
+    return (
+      <main className="auth-shell">
+        <section className="auth-visual">
+          <div className="auth-brand">
+            <span className="brand-mark">↗</span>
+            <span>
+              molar<span>/</span>care
+            </span>
+          </div>
+          <div className="signal-orbit" aria-hidden="true">
+            <span className="orbit-ring orbit-ring-one" />
+            <span className="orbit-ring orbit-ring-two" />
+            <span className="orbit-core" />
+            <span className="orbit-label">LIVE / 01</span>
+          </div>
+          <div className="auth-visual-copy">
+            <span className="eyebrow">DENTAL CLINIC WORKSPACE</span>
+            <h1>
+              Keep your clinic
+              <br />
+              <em>moving.</em>
+            </h1>
+            <p>
+              A calm, focused workspace for doctors, patients, and every
+              appointment in between.
+            </p>
+          </div>
+        </section>
+        <section className="auth-card">
+          <div className="auth-card-inner">
+            <span className="auth-kicker">WELCOME BACK</span>
+            <h2>
+              Sign in to
+              <br />
+              <em>Molar/Care.</em>
+            </h2>
+            <p className="auth-copy">
+              Use your Google account to open the clinic agenda and patient
+              workspace.
+            </p>
+            <button
+              className="google-button"
+              type="button"
+              onClick={signInWithGoogle}
+              disabled={authBusy || !firebaseConfigured}
+            >
+              <span className="google-mark">G</span>
+              <span>
+                {authBusy ? "Opening Google..." : "Continue with Google"}
+              </span>
+              <span className="google-arrow">→</span>
+            </button>
+            {!firebaseConfigured && (
+              <p className="auth-status">
+                Add Firebase configuration to enable sign-in.
+              </p>
+            )}
+            {import.meta.env.DEV && (
+              <button
+                className="local-preview-button"
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem("molar-care-preview", "true");
+                  setLocalPreview(true);
+                  setStatus("Local preview mode");
+                }}
+              >
+                Preview locally without signing in
+              </button>
+            )}
+            {status !== "Ready for setup" && (
+              <p className="auth-status">{status}</p>
+            )}
+            <p className="auth-legal">
+              By continuing, you sign in securely with Google.
+            </p>
+          </div>
+          <div className="auth-footer">
+            <span>HTTPS required</span>
+            <span>Molar/Care · 2026</span>
+          </div>
+        </section>
+      </main>
+    );
   }
 
-  async function sendNotification() {
-    const message = messageText.trim();
-    const sender = deviceName.trim() || "Unnamed device";
-    if (!message) {
-      setStatus("Write a message before sending");
-      return;
-    }
-    localStorage.setItem("signal-lab-device-name", sender);
-    setBusy(true);
-    try {
-      const response = await fetch("/api/send-notification", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, sender }),
-      });
-      const result = await readApiResponse(response);
-      setStatus(
-        response.ok
-          ? (result.message ?? "Notification sent")
-          : (result.error ?? "Notification failed"),
-      );
-    } catch {
-      setStatus("Send endpoint unavailable. Deploy the Vercel API first.");
-    } finally {
-      setBusy(false);
-    }
+  if (!hasNamedDevice) {
+    return (
+      <main className="name-shell">
+        <div className="name-panel">
+          <div className="auth-brand">
+            <span className="brand-mark">↗</span>
+            <span>
+              molar<span>/</span>care
+            </span>
+          </div>
+          <div className="name-progress">
+            <span /> <span className="current" /> <span />
+          </div>
+          <span className="auth-kicker">ONE LAST DETAIL</span>
+          <h1>
+            What should we
+            <br />
+            <em>call this device?</em>
+          </h1>
+          <p className="name-copy">
+            This name appears when you send a pulse, so your other devices know
+            where it came from.
+          </p>
+          <form
+            className="name-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveDeviceName();
+            }}
+          >
+            <label className="field-label" htmlFor="welcome-device-name">
+              Device name
+            </label>
+            <input
+              id="welcome-device-name"
+              value={deviceName}
+              onChange={(event) => setDeviceName(event.target.value)}
+              maxLength={40}
+              placeholder="e.g. Windows desktop"
+              autoFocus
+            />
+            <button className="name-submit" type="submit">
+              Enter Molar/Care <span>→</span>
+            </button>
+          </form>
+          {status !== "Ready for setup" && (
+            <p className="auth-status">{status}</p>
+          )}
+          <button
+            className="quiet-sign-out"
+            type="button"
+            onClick={signOutOfGoogle}
+            disabled={authBusy}
+          >
+            Use a different account
+          </button>
+        </div>
+      </main>
+    );
   }
 
   return (
-    <main>
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">↗</span>
-          <span>signal / lab</span>
-        </div>
-        <span className={`connection ${firebaseConfigured ? "online" : ""}`}>
-          <span />
-          {firebaseConfigured ? "Firebase ready" : "Preview mode"}
-        </span>
-        {user ? (
-          <div className="account-control">
-            {user.photoURL && (
-              <img src={user.photoURL} alt="" className="account-avatar" />
-            )}
-            <span className="account-name">
-              {user.displayName ?? user.email}
-            </span>
-            <button
-              className="auth-button"
-              type="button"
-              onClick={signOutOfGoogle}
-              disabled={authBusy}
-            >
-              Sign out
-            </button>
-          </div>
-        ) : (
-          <button
-            className="auth-button"
-            type="button"
-            onClick={signInWithGoogle}
-            disabled={authBusy}
-          >
-            Sign in with Google
-          </button>
-        )}
-        <button className="install-button" type="button" onClick={installApp}>
-          Install app ↓
-        </button>
-      </header>
-      <section className="intro">
-        <p className="eyebrow">NOTIFICATION TEST CONSOLE · 01</p>
-        <h1>
-          Send a pulse.
-          <br />
-          <em>See it land.</em>
-        </h1>
-        <p className="lede">
-          One shared signal across every installed device. Flip the state here,
-          then wake the network with a real push.
-        </p>
-      </section>
-      <section className="control-grid">
-        <article className={`state-panel ${isOn ? "active" : ""}`}>
-          <div className="panel-label">
-            <span>Shared signal</span>
-            <span>LIVE STATE</span>
-          </div>
-          <div className="state-readout">
-            <span className="state-dot" />
-            <strong>{isOn ? "ON" : "OFF"}</strong>
-          </div>
-          <p>
-            {isOn
-              ? "The signal is active across connected devices."
-              : "The signal is quiet across connected devices."}
-          </p>
-          <button
-            className="toggle"
-            type="button"
-            onClick={toggleState}
-            disabled={busy}
-            aria-pressed={isOn}
-          >
-            <span className="toggle-track">
-              <span />
-            </span>
-            {isOn ? "Switch off" : "Switch on"}
-          </button>
-        </article>
-        <article className="send-panel">
-          <div className="panel-label">
-            <span>Broadcast</span>
-            <span>FCM PUSH</span>
-          </div>
-          <h2>
-            Wake every
-            <br />
-            <em>device.</em>
-          </h2>
-          <p>
-            Send your message to every registered installation, including
-            devices with the app in the background.
-          </p>
-          <label className="field-label" htmlFor="message-text">
-            Message
-          </label>
-          <textarea
-            id="message-text"
-            value={messageText}
-            onChange={(event) => setMessageText(event.target.value)}
-            maxLength={240}
-            rows={3}
-          />
-          <button
-            className="send-button"
-            type="button"
-            onClick={sendNotification}
-            disabled={busy}
-          >
-            <span>Send to all devices</span>
-            <span className="arrow">→</span>
-          </button>
-        </article>
-      </section>
-      <section className="device-strip">
-        <div>
-          <span className="step">02</span>
-          <strong>This device</strong>
-          <p>Name it so the sender is easy to identify.</p>
-        </div>
-        <label className="device-name-field" htmlFor="device-name">
-          <span>Device name</span>
-          <input
-            id="device-name"
-            value={deviceName}
-            onChange={(event) => {
-              setDeviceName(event.target.value);
-              localStorage.setItem(
-                "signal-lab-device-name",
-                event.target.value,
-              );
-            }}
-            maxLength={40}
-            placeholder="e.g. Windows desktop"
-          />
-        </label>
-      </section>
-      <section className="setup-strip">
-        <div>
-          <span className="step">01</span>
-          <strong>Register this device</strong>
-          <p>Allow notifications so this browser can receive the pulse.</p>
-        </div>
-        <button
-          className={`register-button ${deviceReady ? "registered" : ""}`}
-          type="button"
-          onClick={enableNotifications}
-          disabled={busy}
-        >
-          {deviceReady ? "Device registered ✓" : "Enable notifications →"}
-        </button>
-      </section>
-      <footer>
-        <span>{status}</span>
-        <span>HTTPS required · iPhone: add to Home Screen</span>
-      </footer>
-    </main>
+    <DentalDashboard
+      user={activeUser}
+      deviceName={deviceName}
+      authBusy={authBusy}
+      onSignOut={signOutOfGoogle}
+      onInstall={installApp}
+    />
   );
 }
 

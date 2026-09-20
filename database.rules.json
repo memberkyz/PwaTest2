@@ -4,6 +4,14 @@
     "testState": {
       ".read": true,
       ".write": true
+    },
+    "clinicAgenda": {
+      ".read": true,
+      ".write": true
+    },
+    "patients": {
+      ".read": true,
+      ".write": true
     }
   }
 }
