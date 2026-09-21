@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getToken, onMessage } from "firebase/messaging";
 import { firebaseVapidKey, firebaseVapidKeyValid, messaging } from "./firebase";
 import {
@@ -49,9 +49,10 @@ interface DentalDashboardProps {
 type DoctorFilter = "both" | DoctorId;
 type ViewMode = "day" | "week";
 
-const DAY_START_MINUTES = 8 * 60;
-const DAY_END_MINUTES = 18 * 60;
+const DAY_START_MINUTES = 7 * 60;
+const DAY_END_MINUTES = 23 * 60;
 const PX_PER_MINUTE = 1.4;
+const BOARD_PADDING = 12;
 const HOURS = Array.from(
   { length: (DAY_END_MINUTES - DAY_START_MINUTES) / 60 + 1 },
   (_, index) => DAY_START_MINUTES + index * 60,
@@ -100,7 +101,6 @@ export default function DentalDashboard({
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notificationsReady, setNotificationsReady] = useState(false);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const [patients, setPatients] = useState<PatientMap>({});
   const [searchFocused, setSearchFocused] = useState(false);
   const [openPatientId, setOpenPatientId] = useState<string | null>(null);
@@ -216,20 +216,6 @@ export default function DentalDashboard({
     });
   }
 
-  function openDatePicker() {
-    const input = dateInputRef.current;
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      try {
-        input.showPicker();
-        return;
-      } catch {
-        // fall back to focusing the native input below
-      }
-    }
-    input.focus();
-  }
-
   function handleDateInputChange(value: string) {
     if (!value) return;
     const [year, month, day] = value.split("-").map(Number);
@@ -301,7 +287,8 @@ export default function DentalDashboard({
     if (event.target !== event.currentTarget) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const rawMinutes =
-      DAY_START_MINUTES + (event.clientY - rect.top) / PX_PER_MINUTE;
+      DAY_START_MINUTES +
+      (event.clientY - rect.top - BOARD_PADDING) / PX_PER_MINUTE;
     const snapped = Math.min(
       Math.max(Math.round(rawMinutes / 15) * 15, DAY_START_MINUTES),
       DAY_END_MINUTES - 60,
@@ -335,7 +322,8 @@ export default function DentalDashboard({
     if (!appointment) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const rawMinutes =
-      DAY_START_MINUTES + (event.clientY - rect.top) / PX_PER_MINUTE;
+      DAY_START_MINUTES +
+      (event.clientY - rect.top - BOARD_PADDING) / PX_PER_MINUTE;
     const snapped = Math.min(
       Math.max(Math.round(rawMinutes / 15) * 15, DAY_START_MINUTES),
       DAY_END_MINUTES - 15,
@@ -478,7 +466,8 @@ export default function DentalDashboard({
     }
   }
 
-  const gridHeight = (DAY_END_MINUTES - DAY_START_MINUTES) * PX_PER_MINUTE;
+  const gridHeight =
+    (DAY_END_MINUTES - DAY_START_MINUTES) * PX_PER_MINUTE + BOARD_PADDING * 2;
 
   return (
     <main className="agenda-app">
@@ -617,22 +606,15 @@ export default function DentalDashboard({
           </button>
         </div>
         <span className="date-picker-wrap">
-          <button
-            className="agenda-date-label"
-            type="button"
-            onClick={openDatePicker}
-            aria-label="Open calendar to choose a date"
-          >
+          <span className="agenda-date-label" aria-hidden="true">
             {friendlyDate(selectedDate)}
-          </button>
+          </span>
           <input
-            ref={dateInputRef}
             className="hidden-date-input"
             type="date"
             value={activeDateKey}
             onChange={(event) => handleDateInputChange(event.target.value)}
-            tabIndex={-1}
-            aria-hidden="true"
+            aria-label="Choose a date"
           />
         </span>
         <div className="patient-search-wrap">
@@ -704,138 +686,160 @@ export default function DentalDashboard({
           })}
         </div>
       ) : (
-        <div
-          className="agenda-board"
-          style={{
-            gridTemplateColumns: `var(--agenda-gutter, 64px) repeat(${visibleDoctors.length}, 1fr)`,
-          }}
-        >
-          <div className="board-cell corner" />
-          {visibleDoctors.map((doctor) => {
-            const count = Object.keys(appointments[doctor.id] ?? {}).length;
-            return (
-              <header
-                className={`board-cell doctor-head tone-${doctor.tone}`}
-                key={doctor.id}
-              >
-                <span className="doctor-avatar">{doctor.initial}</span>
-                <div>
-                  <strong>{doctor.name}</strong>
-                  <small>
-                    {count} appointment{count === 1 ? "" : "s"}
-                  </small>
-                </div>
-              </header>
-            );
-          })}
-
-          <div className="board-cell corner" />
-          {visibleDoctors.map((doctor) => (
-            <div className="board-cell doctor-note" key={doctor.id}>
-              {noteDraftDoctor === doctor.id ? (
-                <textarea
-                  autoFocus
-                  value={noteDraftText}
-                  onChange={(event) => setNoteDraftText(event.target.value)}
-                  onBlur={() => void commitNote()}
-                  rows={2}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="add-note-link"
-                  onClick={() => startEditNote(doctor.id)}
-                >
-                  {notes[doctor.id]?.trim() ? (
-                    notes[doctor.id]
-                  ) : (
-                    <>
-                      <span>+</span> Add daily note
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          ))}
-
+        <div className="agenda-board-wrap">
           <div
-            className="board-cell time-gutter"
-            style={{ height: gridHeight }}
+            className="agenda-board-header"
+            style={{
+              gridTemplateColumns: `var(--agenda-gutter, 64px) repeat(${visibleDoctors.length}, 1fr)`,
+            }}
           >
-            {HOURS.map((minutes) => (
-              <span
-                className="hour-label"
-                key={minutes}
-                style={{ top: (minutes - DAY_START_MINUTES) * PX_PER_MINUTE }}
-              >
-                {minutesToLabel(minutes)}
-              </span>
+            <div className="board-cell corner" />
+            {visibleDoctors.map((doctor) => {
+              const count = Object.keys(appointments[doctor.id] ?? {}).length;
+              return (
+                <header
+                  className={`board-cell doctor-head tone-${doctor.tone}`}
+                  key={doctor.id}
+                >
+                  <span className="doctor-avatar">{doctor.initial}</span>
+                  <div>
+                    <strong>{doctor.name}</strong>
+                    <small>
+                      {count} appointment{count === 1 ? "" : "s"}
+                    </small>
+                  </div>
+                </header>
+              );
+            })}
+
+            <div className="board-cell corner" />
+            {visibleDoctors.map((doctor) => (
+              <div className="board-cell doctor-note" key={doctor.id}>
+                {noteDraftDoctor === doctor.id ? (
+                  <textarea
+                    autoFocus
+                    value={noteDraftText}
+                    onChange={(event) => setNoteDraftText(event.target.value)}
+                    onBlur={() => void commitNote()}
+                    rows={2}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="add-note-link"
+                    onClick={() => startEditNote(doctor.id)}
+                  >
+                    {notes[doctor.id]?.trim() ? (
+                      notes[doctor.id]
+                    ) : (
+                      <>
+                        <span>+</span> Add daily note
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             ))}
           </div>
-          {visibleDoctors.map((doctor) => (
+
+          <div className="agenda-board-scroll">
             <div
-              className={`board-cell doctor-body tone-${doctor.tone}`}
-              key={doctor.id}
-              style={{ height: gridHeight }}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => handleDrop(event, doctor.id)}
-              onClick={(event) => handleColumnClick(event, doctor.id)}
+              className="agenda-board-body"
+              style={{
+                gridTemplateColumns: `var(--agenda-gutter, 64px) repeat(${visibleDoctors.length}, 1fr)`,
+              }}
             >
-              {HOURS.map((minutes) => (
-                <div
-                  className="hour-line"
-                  key={minutes}
-                  style={{ top: (minutes - DAY_START_MINUTES) * PX_PER_MINUTE }}
-                />
-              ))}
-              {Object.entries(appointments[doctor.id] ?? {}).map(
-                ([id, appointment]) => (
-                  <article
-                    key={id}
-                    draggable
-                    onDragStart={(event) =>
-                      handleDragStart(event, doctor.id, id)
-                    }
-                    className={`appt-card status-${appointment.status.toLowerCase()} ${
-                      matchesSearch(appointment) ? "" : "dimmed"
-                    }`}
+              <div
+                className="board-cell time-gutter"
+                style={{ height: gridHeight }}
+              >
+                {HOURS.map((minutes) => (
+                  <span
+                    className="hour-label"
+                    key={minutes}
                     style={{
                       top:
-                        (labelToMinutes(appointment.start) -
-                          DAY_START_MINUTES) *
-                        PX_PER_MINUTE,
-                      height: Math.max(
-                        appointment.duration * PX_PER_MINUTE,
-                        34,
-                      ),
-                    }}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEditModal(doctor.id, id, appointment);
+                        (minutes - DAY_START_MINUTES) * PX_PER_MINUTE +
+                        BOARD_PADDING,
                     }}
                   >
-                    <div className="appt-time">
-                      {appointment.start} · {appointment.duration}m
-                    </div>
-                    <strong>{appointment.patientName}</strong>
-                    {appointment.treatment && (
-                      <span>{appointment.treatment}</span>
-                    )}
-                    {appointment.phone && (
-                      <a
-                        className="appt-phone"
-                        href={`tel:${appointment.phone}`}
-                        onClick={(event) => event.stopPropagation()}
+                    {minutesToLabel(minutes)}
+                  </span>
+                ))}
+              </div>
+              {visibleDoctors.map((doctor) => (
+                <div
+                  className={`board-cell doctor-body tone-${doctor.tone}`}
+                  key={doctor.id}
+                  style={{ height: gridHeight }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => handleDrop(event, doctor.id)}
+                  onClick={(event) => handleColumnClick(event, doctor.id)}
+                >
+                  {HOURS.map((minutes) => (
+                    <div
+                      className="hour-line"
+                      key={minutes}
+                      style={{
+                        top:
+                          (minutes - DAY_START_MINUTES) * PX_PER_MINUTE +
+                          BOARD_PADDING,
+                      }}
+                    />
+                  ))}
+                  {Object.entries(appointments[doctor.id] ?? {}).map(
+                    ([id, appointment]) => (
+                      <article
+                        key={id}
+                        draggable
+                        onDragStart={(event) =>
+                          handleDragStart(event, doctor.id, id)
+                        }
+                        className={`appt-card status-${appointment.status.toLowerCase()} ${
+                          matchesSearch(appointment) ? "" : "dimmed"
+                        }`}
+                        style={{
+                          top:
+                            (labelToMinutes(appointment.start) -
+                              DAY_START_MINUTES) *
+                              PX_PER_MINUTE +
+                            BOARD_PADDING,
+                          height: Math.max(
+                            appointment.duration * PX_PER_MINUTE,
+                            34,
+                          ),
+                        }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEditModal(doctor.id, id, appointment);
+                        }}
                       >
-                        {appointment.phone}
-                      </a>
-                    )}
-                    <span className="status-chip">{appointment.status}</span>
-                  </article>
-                ),
-              )}
+                        <div className="appt-time">
+                          {appointment.start} · {appointment.duration}m
+                        </div>
+                        <strong>{appointment.patientName}</strong>
+                        {appointment.treatment && (
+                          <span>{appointment.treatment}</span>
+                        )}
+                        {appointment.phone && (
+                          <a
+                            className="appt-phone"
+                            href={`tel:${appointment.phone}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {appointment.phone}
+                          </a>
+                        )}
+                        <span className="status-chip">
+                          {appointment.status}
+                        </span>
+                      </article>
+                    ),
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
 
