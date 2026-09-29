@@ -1,17 +1,12 @@
-import { useState } from "react";
-import {
-  STATUS_OPTIONS,
-  type AppointmentStatus,
-  type Doctor,
-  type DoctorId,
-} from "./clinic";
+import { useMemo, useState } from "react";
+import { X } from "lucide-react";
+import { type Doctor, type DoctorId, type PatientMap } from "./clinic";
 
 export interface AppointmentDraft {
   doctorId: DoctorId;
   patientName: string;
   phone: string;
   treatment: string;
-  status: AppointmentStatus;
   date: string;
   start: string;
   duration: number;
@@ -20,6 +15,7 @@ export interface AppointmentDraft {
 
 interface AppointmentModalProps {
   doctors: Doctor[];
+  patients: PatientMap;
   draft: AppointmentDraft;
   isEditing: boolean;
   onCancel: () => void;
@@ -29,6 +25,7 @@ interface AppointmentModalProps {
 
 export default function AppointmentModal({
   doctors,
+  patients,
   draft,
   isEditing,
   onCancel,
@@ -36,7 +33,16 @@ export default function AppointmentModal({
   onDelete,
 }: AppointmentModalProps) {
   const [form, setForm] = useState<AppointmentDraft>(draft);
+  const [nameFocused, setNameFocused] = useState(false);
   const canSave = form.patientName.trim().length > 0;
+
+  const suggestions = useMemo(() => {
+    const query = form.patientName.trim().toLowerCase();
+    if (!query) return [];
+    return Object.entries(patients)
+      .filter(([, patient]) => patient.name.toLowerCase().includes(query))
+      .slice(0, 6);
+  }, [form.patientName, patients]);
 
   return (
     <div className="modal-backdrop" onClick={onCancel}>
@@ -57,22 +63,57 @@ export default function AppointmentModal({
             onClick={onCancel}
             aria-label="Close"
           >
-            ×
+            <X size={18} />
           </button>
         </header>
 
-        <label className="modal-field">
-          <span>Patient name</span>
-          <input
-            value={form.patientName}
-            onChange={(event) =>
-              setForm({ ...form, patientName: event.target.value })
-            }
-            placeholder="e.g. Sofia Martinez"
-            autoFocus
-            required
-          />
-        </label>
+        <div className="modal-field patient-name-field">
+          <label>
+            <span>Patient name</span>
+            <input
+              value={form.patientName}
+              onChange={(event) =>
+                setForm({ ...form, patientName: event.target.value })
+              }
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
+              placeholder="e.g. Sofia Martinez"
+              autoComplete="off"
+              autoFocus
+              required
+            />
+          </label>
+          {nameFocused && suggestions.length > 0 && (
+            <div
+              className="search-results"
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              {suggestions.map(([id, patient]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className="search-result-row"
+                  onClick={() => {
+                    setForm({
+                      ...form,
+                      patientName: patient.name,
+                      phone: patient.phone,
+                    });
+                    setNameFocused(false);
+                  }}
+                >
+                  <span className="search-result-avatar">
+                    {patient.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="search-result-info">
+                    <strong>{patient.name}</strong>
+                    <small>{patient.phone || "No phone on file"}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <label className="modal-field">
           <span>Phone / WhatsApp</span>
@@ -114,27 +155,6 @@ export default function AppointmentModal({
             </select>
           </label>
           <label className="modal-field">
-            <span>Status</span>
-            <select
-              value={form.status}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  status: event.target.value as AppointmentStatus,
-                })
-              }
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option value={status} key={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="modal-row">
-          <label className="modal-field">
             <span>Date</span>
             <input
               type="date"
@@ -145,6 +165,9 @@ export default function AppointmentModal({
               required
             />
           </label>
+        </div>
+
+        <div className="modal-row">
           <label className="modal-field">
             <span>Start time</span>
             <input
@@ -157,19 +180,22 @@ export default function AppointmentModal({
               required
             />
           </label>
+          <label className="modal-field">
+            <span>Duration (minutes)</span>
+            <input
+              type="number"
+              min={15}
+              step={15}
+              value={form.duration}
+              onChange={(event) =>
+                setForm({
+                  ...form,
+                  duration: Number(event.target.value) || 60,
+                })
+              }
+            />
+          </label>
         </div>
-        <label className="modal-field">
-          <span>Duration (minutes)</span>
-          <input
-            type="number"
-            min={15}
-            step={15}
-            value={form.duration}
-            onChange={(event) =>
-              setForm({ ...form, duration: Number(event.target.value) || 60 })
-            }
-          />
-        </label>
 
         <label className="modal-field">
           <span>Notes</span>

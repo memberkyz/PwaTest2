@@ -1,13 +1,12 @@
 import { useEffect, useState } from "react";
+import { Plus, X } from "lucide-react";
 import {
   DOCTORS,
-  STATUS_OPTIONS,
   addManualTreatmentRecord,
   deleteTreatmentRecord,
   subscribeToPatientRecords,
   updatePatient,
   dateKey,
-  type AppointmentStatus,
   type DoctorId,
   type Patient,
   type RecordMap,
@@ -48,8 +47,6 @@ export default function PatientProfile({
   const [recordDate, setRecordDate] = useState(() => dateKey(new Date()));
   const [recordDoctor, setRecordDoctor] = useState<DoctorId>(DOCTORS[0].id);
   const [recordTreatment, setRecordTreatment] = useState("");
-  const [recordStatus, setRecordStatus] =
-    useState<AppointmentStatus>("Completed");
   const [recordNotes, setRecordNotes] = useState("");
 
   useEffect(
@@ -81,7 +78,6 @@ export default function PatientProfile({
       date: recordDate,
       doctorId: recordDoctor,
       treatment: recordTreatment.trim(),
-      status: recordStatus,
       notes: recordNotes.trim(),
       createdAt: Date.now(),
     });
@@ -109,7 +105,7 @@ export default function PatientProfile({
             onClick={onClose}
             aria-label="Close"
           >
-            ×
+            <X size={18} />
           </button>
         </header>
 
@@ -165,7 +161,7 @@ export default function PatientProfile({
               className="add-note-link"
               onClick={() => setShowAddRecord((value) => !value)}
             >
-              <span>+</span> Add past treatment
+              <Plus size={12} /> Add past treatment
             </button>
           </div>
 
@@ -204,23 +200,6 @@ export default function PatientProfile({
                   placeholder="e.g. Root canal, Tooth 16"
                 />
               </label>
-              <div className="modal-row">
-                <label className="modal-field">
-                  <span>Status</span>
-                  <select
-                    value={recordStatus}
-                    onChange={(event) =>
-                      setRecordStatus(event.target.value as AppointmentStatus)
-                    }
-                  >
-                    {STATUS_OPTIONS.map((status) => (
-                      <option value={status} key={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
               <label className="modal-field">
                 <span>Notes</span>
                 <textarea
@@ -255,7 +234,7 @@ export default function PatientProfile({
             )}
             {sortedRecords.map(([recordId, record]) => (
               <article
-                className={`record-row status-${record.status.toLowerCase()}`}
+                className={`record-row ${record.cancelled ? "cancelled" : ""}`}
                 key={recordId}
               >
                 <div className="record-row-main">
@@ -265,14 +244,16 @@ export default function PatientProfile({
                 </div>
                 {record.notes && <p className="record-notes">{record.notes}</p>}
                 <div className="record-row-side">
-                  <span className="status-chip">{record.status}</span>
+                  {record.cancelled && (
+                    <span className="status-chip">Cancelled</span>
+                  )}
                   <button
                     type="button"
                     className="record-remove"
                     onClick={() => void removeRecord(recordId)}
                     aria-label="Remove record"
                   >
-                    ×
+                    <X size={14} />
                   </button>
                 </div>
               </article>

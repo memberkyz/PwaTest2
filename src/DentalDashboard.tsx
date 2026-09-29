@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getToken, onMessage } from "firebase/messaging";
+import {
+  Bell,
+  BellOff,
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  MessageCircle,
+  Phone,
+  Plus,
+  Search,
+} from "lucide-react";
 import { firebaseVapidKey, firebaseVapidKeyValid, messaging } from "./firebase";
 import {
   DOCTORS,
@@ -22,6 +35,7 @@ import {
   updatePatient,
   updateTreatmentRecord,
   type Appointment,
+  type AppointmentMap,
   type DayAppointments,
   type DayCounts,
   type DayNotes,
@@ -31,6 +45,79 @@ import {
 } from "./clinic";
 import AppointmentModal, { type AppointmentDraft } from "./AppointmentModal";
 import PatientProfile from "./PatientProfile";
+
+function ToothIcon() {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3c-2.5 0-4.5 1.4-6 1.4C4.2 4.4 3 5.8 3 8c0 2.6.9 4.8 1.6 7.4.5 1.9.9 4.4 2.3 5.4.8.6 1.4-.6 1.7-1.6.4-1.4.6-3.6 2-3.6h2.8c1.4 0 1.6 2.2 2 3.6.3 1 .9 2.2 1.7 1.6 1.4-1 1.8-3.5 2.3-5.4C20.1 12.8 21 10.6 21 8c0-2.2-1.2-3.6-3-3.6-1.5 0-3.5-1.4-6-1.4Z" />
+    </svg>
+  );
+}
+
+function whatsappHref(phone: string): string {
+  return `https://wa.me/${phone.replace(/[^\d]/g, "")}`;
+}
+
+interface LayoutEntry {
+  id: string;
+  appointment: Appointment;
+  col: number;
+  cols: number;
+}
+
+// Packs overlapping appointments into side-by-side columns (like Google Calendar).
+function layoutAppointments(map: AppointmentMap): LayoutEntry[] {
+  const items = Object.entries(map)
+    .map(([id, appointment]) => ({
+      id,
+      appointment,
+      start: labelToMinutes(appointment.start),
+      end: labelToMinutes(appointment.start) + appointment.duration,
+    }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const colOf: Record<string, number> = {};
+  const clusterCols: Record<string, number> = {};
+  let active: { id: string; col: number; end: number }[] = [];
+  let clusterIds: string[] = [];
+  let clusterSize = 0;
+
+  const flushCluster = () => {
+    for (const id of clusterIds) clusterCols[id] = clusterSize;
+    clusterIds = [];
+    clusterSize = 0;
+  };
+
+  for (const item of items) {
+    active = active.filter((entry) => entry.end > item.start);
+    if (active.length === 0) flushCluster();
+    const usedCols = new Set(active.map((entry) => entry.col));
+    let col = 0;
+    while (usedCols.has(col)) col += 1;
+    active.push({ id: item.id, col, end: item.end });
+    colOf[item.id] = col;
+    clusterIds.push(item.id);
+    clusterSize = Math.max(clusterSize, active.length);
+  }
+  flushCluster();
+
+  return items.map((item) => ({
+    id: item.id,
+    appointment: item.appointment,
+    col: colOf[item.id],
+    cols: clusterCols[item.id] ?? 1,
+  }));
+}
 
 export interface DashboardUser {
   displayName: string | null;
@@ -53,10 +140,25 @@ const DAY_START_MINUTES = 7 * 60;
 const DAY_END_MINUTES = 23 * 60;
 const PX_PER_MINUTE = 1.4;
 const BOARD_PADDING = 12;
+const DRAG_THRESHOLD_PX = 6;
+const CARD_GAP = 4;
 const HOURS = Array.from(
   { length: (DAY_END_MINUTES - DAY_START_MINUTES) / 60 + 1 },
   (_, index) => DAY_START_MINUTES + index * 60,
 );
+
+interface DragState {
+  fromDoctorId: DoctorId;
+  id: string;
+  pointerId: number;
+  grabOffsetY: number;
+  duration: number;
+  startX: number;
+  startY: number;
+  isDragging: boolean;
+  targetDoctorId: DoctorId;
+  snappedMinutes: number;
+}
 
 type ModalState =
   | {
@@ -104,6 +206,8 @@ export default function DentalDashboard({
   const [patients, setPatients] = useState<PatientMap>({});
   const [searchFocused, setSearchFocused] = useState(false);
   const [openPatientId, setOpenPatientId] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const justDraggedRef = useRef(false);
 
   const activeDateKey = useMemo(() => dateKey(selectedDate), [selectedDate]);
   const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
@@ -297,38 +401,81 @@ export default function DentalDashboard({
   }
 
   function handleDragStart(
-    event: React.DragEvent,
+    event: React.PointerEvent<HTMLElement>,
     doctorId: DoctorId,
     id: string,
+    appointment: Appointment,
   ) {
-    event.dataTransfer.setData("text/plain", JSON.stringify({ doctorId, id }));
-    event.dataTransfer.effectAllowed = "move";
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const card = event.currentTarget;
+    card.setPointerCapture(event.pointerId);
+    const cardRect = card.getBoundingClientRect();
+    setDragState({
+      fromDoctorId: doctorId,
+      id,
+      pointerId: event.pointerId,
+      grabOffsetY: event.clientY - cardRect.top,
+      duration: appointment.duration,
+      startX: event.clientX,
+      startY: event.clientY,
+      isDragging: false,
+      targetDoctorId: doctorId,
+      snappedMinutes: labelToMinutes(appointment.start),
+    });
   }
 
-  function handleDrop(
-    event: React.DragEvent<HTMLDivElement>,
-    toDoctorId: DoctorId,
-  ) {
-    event.preventDefault();
-    const raw = event.dataTransfer.getData("text/plain");
-    if (!raw) return;
-    let payload: { doctorId: DoctorId; id: string };
-    try {
-      payload = JSON.parse(raw);
-    } catch {
+  function handleDragMove(event: React.PointerEvent<HTMLElement>) {
+    setDragState((previous) => {
+      if (!previous || previous.pointerId !== event.pointerId) return previous;
+      const movedX = Math.abs(event.clientX - previous.startX);
+      const movedY = Math.abs(event.clientY - previous.startY);
+      const isDragging =
+        previous.isDragging ||
+        movedX > DRAG_THRESHOLD_PX ||
+        movedY > DRAG_THRESHOLD_PX;
+      if (!isDragging) return previous;
+
+      const column = document
+        .elementsFromPoint(event.clientX, event.clientY)
+        .find(
+          (element): element is HTMLElement =>
+            element instanceof HTMLElement &&
+            element.closest(".doctor-body") !== null,
+        )
+        ?.closest<HTMLElement>(".doctor-body");
+      if (!column?.dataset.doctorId) return { ...previous, isDragging };
+
+      const targetDoctorId = column.dataset.doctorId as DoctorId;
+      const rect = column.getBoundingClientRect();
+      const rawMinutes =
+        DAY_START_MINUTES +
+        (event.clientY - rect.top - previous.grabOffsetY - BOARD_PADDING) /
+          PX_PER_MINUTE;
+      const snappedMinutes = Math.min(
+        Math.max(Math.round(rawMinutes / 15) * 15, DAY_START_MINUTES),
+        DAY_END_MINUTES - 15,
+      );
+      return { ...previous, isDragging, targetDoctorId, snappedMinutes };
+    });
+  }
+
+  function handleDragEnd(event: React.PointerEvent<HTMLElement>) {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    const drag = dragState;
+    setDragState(null);
+    if (!drag.isDragging) return;
+    justDraggedRef.current = true;
+
+    const appointment = appointments[drag.fromDoctorId]?.[drag.id];
+    if (!appointment) return;
+    const newStart = minutesToLabel(drag.snappedMinutes);
+    if (
+      drag.targetDoctorId === drag.fromDoctorId &&
+      newStart === appointment.start
+    ) {
       return;
     }
-    const appointment = appointments[payload.doctorId]?.[payload.id];
-    if (!appointment) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const rawMinutes =
-      DAY_START_MINUTES +
-      (event.clientY - rect.top - BOARD_PADDING) / PX_PER_MINUTE;
-    const snapped = Math.min(
-      Math.max(Math.round(rawMinutes / 15) * 15, DAY_START_MINUTES),
-      DAY_END_MINUTES - 15,
-    );
-    const newStart = minutesToLabel(snapped);
     const updated: Appointment = {
       ...appointment,
       start: newStart,
@@ -336,19 +483,19 @@ export default function DentalDashboard({
     };
     moveAppointment(
       activeDateKey,
-      payload.doctorId,
-      toDoctorId,
-      payload.id,
+      drag.fromDoctorId,
+      drag.targetDoctorId,
+      drag.id,
       updated,
     )
       .then(() => {
         if (updated.patientId) {
-          void updateTreatmentRecord(updated.patientId, payload.id, {
-            doctorId: toDoctorId,
+          void updateTreatmentRecord(updated.patientId, drag.id, {
+            doctorId: drag.targetDoctorId,
           });
         }
         notifyChange(
-          `${appointment.patientName} rescheduled to ${newStart} with ${doctorName(toDoctorId)}`,
+          `${appointment.patientName} rescheduled to ${newStart} with ${doctorName(drag.targetDoctorId)}`,
         );
       })
       .catch(() => setStatusMessage("Could not reschedule the appointment"));
@@ -359,7 +506,6 @@ export default function DentalDashboard({
       patientName: draft.patientName.trim(),
       phone: draft.phone.trim(),
       treatment: draft.treatment.trim(),
-      status: draft.status,
       start: draft.start,
       duration: draft.duration,
       notes: draft.notes.trim(),
@@ -399,7 +545,6 @@ export default function DentalDashboard({
           date: draft.date,
           doctorId: draft.doctorId,
           treatment: appointment.treatment,
-          status: appointment.status,
           notes: appointment.notes,
         });
         notifyChange(
@@ -415,7 +560,6 @@ export default function DentalDashboard({
           date: draft.date,
           doctorId: draft.doctorId,
           treatment: appointment.treatment,
-          status: appointment.status,
           notes: appointment.notes,
           appointmentId,
           createdAt: Date.now(),
@@ -436,7 +580,7 @@ export default function DentalDashboard({
     try {
       if (appointment.patientId) {
         await updateTreatmentRecord(appointment.patientId, id, {
-          status: "Cancelled",
+          cancelled: true,
         });
       }
       await deleteAppointment(date, doctorId, id);
@@ -473,7 +617,9 @@ export default function DentalDashboard({
     <main className="agenda-app">
       <header className="agenda-topbar">
         <div className="agenda-brand">
-          <span className="agenda-brand-icon">🦷</span>
+          <span className="agenda-brand-icon">
+            <ToothIcon />
+          </span>
           <strong>Dental Agenda</strong>
         </div>
         <div className="agenda-topbar-actions">
@@ -487,7 +633,7 @@ export default function DentalDashboard({
               setShowProfileMenu(false);
             }}
           >
-            {notificationsReady ? "🔔" : "🔕"}
+            {notificationsReady ? <Bell size={18} /> : <BellOff size={18} />}
           </button>
           {showNotifications && (
             <div className="notification-popover">
@@ -545,7 +691,7 @@ export default function DentalDashboard({
             onClick={() => setViewMode("day")}
             aria-label="Day view"
           >
-            📅
+            <Calendar size={16} />
           </button>
           <button
             className={viewMode === "week" ? "active" : ""}
@@ -553,7 +699,7 @@ export default function DentalDashboard({
             onClick={() => setViewMode("week")}
             aria-label="Week view"
           >
-            ▦
+            <LayoutGrid size={16} />
           </button>
         </div>
         <div
@@ -588,7 +734,7 @@ export default function DentalDashboard({
             onClick={() => shiftDate(-1)}
             aria-label="Previous day"
           >
-            ‹
+            <ChevronLeft size={16} />
           </button>
           <button
             className="today-link"
@@ -602,12 +748,13 @@ export default function DentalDashboard({
             onClick={() => shiftDate(1)}
             aria-label="Next day"
           >
-            ›
+            <ChevronRight size={16} />
           </button>
         </div>
         <span className="date-picker-wrap">
           <span className="agenda-date-label" aria-hidden="true">
             {friendlyDate(selectedDate)}
+            <ChevronDown className="agenda-date-caret" size={12} />
           </span>
           <input
             className="hidden-date-input"
@@ -619,7 +766,7 @@ export default function DentalDashboard({
         </span>
         <div className="patient-search-wrap">
           <label className="agenda-search">
-            <span>⌕</span>
+            <Search size={14} />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -733,7 +880,7 @@ export default function DentalDashboard({
                       notes[doctor.id]
                     ) : (
                       <>
-                        <span>+</span> Add daily note
+                        <Plus size={12} /> Add daily note
                       </>
                     )}
                   </button>
@@ -771,9 +918,8 @@ export default function DentalDashboard({
                 <div
                   className={`board-cell doctor-body tone-${doctor.tone}`}
                   key={doctor.id}
+                  data-doctor-id={doctor.id}
                   style={{ height: gridHeight }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => handleDrop(event, doctor.id)}
                   onClick={(event) => handleColumnClick(event, doctor.id)}
                 >
                   {HOURS.map((minutes) => (
@@ -787,16 +933,34 @@ export default function DentalDashboard({
                       }}
                     />
                   ))}
-                  {Object.entries(appointments[doctor.id] ?? {}).map(
-                    ([id, appointment]) => (
+                  {dragState?.isDragging &&
+                    dragState.targetDoctorId === doctor.id && (
+                      <div
+                        className="drop-ghost"
+                        style={{
+                          top:
+                            (dragState.snappedMinutes - DAY_START_MINUTES) *
+                              PX_PER_MINUTE +
+                            BOARD_PADDING,
+                          height: Math.max(
+                            dragState.duration * PX_PER_MINUTE,
+                            34,
+                          ),
+                        }}
+                      />
+                    )}
+                  {layoutAppointments(appointments[doctor.id] ?? {}).map(
+                    ({ id, appointment, col, cols }) => (
                       <article
                         key={id}
-                        draggable
-                        onDragStart={(event) =>
-                          handleDragStart(event, doctor.id, id)
-                        }
-                        className={`appt-card status-${appointment.status.toLowerCase()} ${
+                        className={`appt-card tone-${doctor.tone} ${
                           matchesSearch(appointment) ? "" : "dimmed"
+                        } ${
+                          dragState?.id === id &&
+                          dragState.fromDoctorId === doctor.id &&
+                          dragState.isDragging
+                            ? "dragging"
+                            : ""
                         }`}
                         style={{
                           top:
@@ -808,9 +972,21 @@ export default function DentalDashboard({
                             appointment.duration * PX_PER_MINUTE,
                             34,
                           ),
+                          left: `calc(6px + (100% - 12px - ${CARD_GAP * (cols - 1)}px) * ${col} / ${cols} + ${CARD_GAP * col}px)`,
+                          width: `calc((100% - 12px - ${CARD_GAP * (cols - 1)}px) / ${cols})`,
                         }}
+                        onPointerDown={(event) =>
+                          handleDragStart(event, doctor.id, id, appointment)
+                        }
+                        onPointerMove={handleDragMove}
+                        onPointerUp={handleDragEnd}
+                        onPointerCancel={handleDragEnd}
                         onClick={(event) => {
                           event.stopPropagation();
+                          if (justDraggedRef.current) {
+                            justDraggedRef.current = false;
+                            return;
+                          }
                           openEditModal(doctor.id, id, appointment);
                         }}
                       >
@@ -822,17 +998,28 @@ export default function DentalDashboard({
                           <span>{appointment.treatment}</span>
                         )}
                         {appointment.phone && (
-                          <a
-                            className="appt-phone"
-                            href={`tel:${appointment.phone}`}
+                          <div
+                            className="appt-actions"
                             onClick={(event) => event.stopPropagation()}
                           >
-                            {appointment.phone}
-                          </a>
+                            <a
+                              className="appt-action call"
+                              href={`tel:${appointment.phone}`}
+                              aria-label="Call patient"
+                            >
+                              <Phone size={11} />
+                            </a>
+                            <a
+                              className="appt-action whatsapp"
+                              href={whatsappHref(appointment.phone)}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label="Message patient on WhatsApp"
+                            >
+                              <MessageCircle size={11} />
+                            </a>
+                          </div>
                         )}
-                        <span className="status-chip">
-                          {appointment.status}
-                        </span>
                       </article>
                     ),
                   )}
@@ -846,6 +1033,7 @@ export default function DentalDashboard({
       {modalState && (
         <AppointmentModal
           doctors={DOCTORS}
+          patients={patients}
           isEditing={modalState.mode === "edit"}
           draft={
             modalState.mode === "edit"
@@ -854,7 +1042,6 @@ export default function DentalDashboard({
                   patientName: modalState.appointment.patientName,
                   phone: modalState.appointment.phone,
                   treatment: modalState.appointment.treatment,
-                  status: modalState.appointment.status,
                   date: modalState.date,
                   start: modalState.appointment.start,
                   duration: modalState.appointment.duration,
@@ -865,7 +1052,6 @@ export default function DentalDashboard({
                   patientName: modalState.patientName ?? "",
                   phone: modalState.phone ?? "",
                   treatment: "",
-                  status: "Scheduled",
                   date: modalState.date,
                   start: modalState.start,
                   duration: 60,

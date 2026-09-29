@@ -36,24 +36,10 @@ export const DOCTORS: Doctor[] = [
   },
 ];
 
-export type AppointmentStatus =
-  | "Scheduled"
-  | "Waiting"
-  | "Completed"
-  | "Cancelled";
-
-export const STATUS_OPTIONS: AppointmentStatus[] = [
-  "Scheduled",
-  "Waiting",
-  "Completed",
-  "Cancelled",
-];
-
 export interface Appointment {
   patientName: string;
   phone: string;
   treatment: string;
-  status: AppointmentStatus;
   start: string; // "HH:mm", 15-minute granularity
   duration: number; // minutes
   notes: string;
@@ -73,7 +59,7 @@ export interface TreatmentRecord {
   date: string; // "yyyy-mm-dd"
   doctorId: DoctorId;
   treatment: string;
-  status: AppointmentStatus;
+  cancelled?: boolean;
   notes: string;
   createdAt: number;
   appointmentId?: string;

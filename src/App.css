@@ -807,6 +807,7 @@ footer {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  overscroll-behavior: contain;
   background: #f6f7f6;
   color: #24312c;
   font-family: "Space Grotesk", sans-serif;
@@ -837,7 +838,7 @@ footer {
   place-items: center;
   border-radius: 9px;
   background: #17a398;
-  font-size: 16px;
+  color: #fff;
 }
 .agenda-topbar-actions {
   position: relative;
@@ -886,6 +887,10 @@ footer {
   background: #f1f3f2;
 }
 .segmented-group button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 6px 12px;
   border: 0;
   border-radius: 6px;
@@ -913,11 +918,12 @@ footer {
   border: 0;
   border-radius: 8px;
   background: #f1f3f2;
-  font-size: 16px;
+  color: #55665f;
 }
 .icon-button.ready,
 .icon-button.active {
   background: #e6f5f2;
+  color: #17a398;
 }
 .profile-menu-wrap {
   position: relative;
@@ -1029,7 +1035,6 @@ footer {
   place-items: center;
   border-radius: 6px;
   color: #55665f;
-  font-size: 15px;
 }
 .date-nav button[aria-label]:hover {
   background: #fff;
@@ -1051,7 +1056,9 @@ footer {
   display: inline-flex;
 }
 .agenda-date-label {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 7px 12px;
   border: 1px solid #e3e8e5;
   border-radius: 8px;
@@ -1065,11 +1072,8 @@ footer {
   border-color: #a9dcd2;
   background: #f3fbfa;
 }
-.agenda-date-label::after {
-  content: "▾";
-  margin-left: 8px;
+.agenda-date-caret {
   color: #93a29c;
-  font-size: 9px;
 }
 .hidden-date-input {
   position: absolute;
@@ -1101,6 +1105,7 @@ footer {
   margin: 18px 22px;
   padding-bottom: 18px;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
@@ -1166,6 +1171,7 @@ footer {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .agenda-board-body {
   position: relative;
@@ -1216,15 +1222,15 @@ footer {
   background: #fbfcfb;
 }
 .add-note-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 0;
   border: 0;
   background: transparent;
   color: #17a398;
   font-size: 12px;
   text-align: left;
-}
-.add-note-link span {
-  margin-right: 3px;
 }
 .doctor-note textarea {
   width: 100%;
@@ -1273,8 +1279,6 @@ footer {
 }
 .appt-card {
   position: absolute;
-  left: 6px;
-  right: 6px;
   padding: 6px 8px;
   border-left: 3px solid;
   border-radius: 6px;
@@ -1282,22 +1286,31 @@ footer {
   cursor: grab;
   background: #fff;
   box-shadow: 0 2px 6px rgba(23, 44, 38, 0.08);
+  touch-action: none;
+  user-select: none;
 }
 .appt-card.dimmed {
   opacity: 0.3;
 }
-.appt-card.status-scheduled {
-  border-color: #3f8ff2;
+.appt-card.tone-teal {
+  border-color: #17a398;
 }
-.appt-card.status-waiting {
-  border-color: #e2a53a;
+.appt-card.tone-orange {
+  border-color: #d97b28;
 }
-.appt-card.status-completed {
-  border-color: #2fa66a;
+.appt-card.dragging {
+  z-index: 5;
+  opacity: 0.4;
+  cursor: grabbing;
 }
-.appt-card.status-cancelled {
-  border-color: #a3adaa;
-  opacity: 0.55;
+.drop-ghost {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  border: 2px dashed #17a398;
+  border-radius: 6px;
+  background: rgba(23, 163, 152, 0.12);
+  pointer-events: none;
 }
 .appt-time {
   color: #8b9a94;
@@ -1322,10 +1335,26 @@ footer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.appt-phone {
-  display: block;
-  color: #17a398;
-  font-size: 10px;
+.appt-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.appt-action {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.appt-action.call {
+  background: #e6f0fd;
+  color: #3f8ff2;
+}
+.appt-action.whatsapp {
+  background: #e3f7e9;
+  color: #25d366;
 }
 .status-chip {
   display: inline-block;
@@ -1366,10 +1395,11 @@ footer {
   font-size: 17px;
 }
 .modal-close {
+  display: grid;
+  place-items: center;
   border: 0;
   background: transparent;
   color: #8b9a94;
-  font-size: 20px;
 }
 .modal-field {
   display: grid;
@@ -1399,6 +1429,18 @@ footer {
 .modal-field textarea:focus {
   border-color: #17a398;
   box-shadow: 0 0 0 2px #cdeee9;
+}
+.patient-name-field {
+  position: relative;
+}
+.patient-name-field label {
+  display: grid;
+  gap: 5px;
+}
+.patient-name-field .search-results {
+  left: 0;
+  right: 0;
+  width: auto;
 }
 .modal-row {
   display: grid;
@@ -1564,16 +1606,7 @@ footer {
   border-radius: 7px;
   background: #fbfcfb;
 }
-.record-row.status-completed {
-  border-color: #2fa66a;
-}
-.record-row.status-scheduled {
-  border-color: #3f8ff2;
-}
-.record-row.status-waiting {
-  border-color: #e2a53a;
-}
-.record-row.status-cancelled {
+.record-row.cancelled {
   border-color: #a3adaa;
   opacity: 0.7;
 }
@@ -1612,11 +1645,12 @@ footer {
   gap: 8px;
 }
 .record-remove {
+  display: grid;
+  place-items: center;
   margin-left: auto;
   border: 0;
   background: transparent;
   color: #a3adaa;
-  font-size: 15px;
 }
 .record-remove:hover {
   color: #b3402b;
@@ -1689,8 +1723,6 @@ footer {
     font-size: 8px;
   }
   .appt-card {
-    left: 3px;
-    right: 3px;
     padding: 4px 5px;
   }
   .appt-card strong,
@@ -1698,8 +1730,11 @@ footer {
     font-size: 9px;
   }
   .appt-time,
-  .appt-phone,
   .status-chip {
     font-size: 8px;
+  }
+  .appt-action {
+    width: 16px;
+    height: 16px;
   }
 }
