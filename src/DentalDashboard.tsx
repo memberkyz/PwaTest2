@@ -12,6 +12,7 @@ import {
   Phone,
   Plus,
   Search,
+  Users,
 } from "lucide-react";
 import { firebaseVapidKey, firebaseVapidKeyValid, messaging } from "./firebase";
 import {
@@ -54,7 +55,7 @@ import {
   type PatientMap,
 } from "./clinic";
 import AppointmentModal, { type AppointmentDraft } from "./AppointmentModal";
-import PatientProfile from "./PatientProfile";
+import PatientProfilePanel from "./PatientProfile";
 
 function ToothIcon() {
   return (
@@ -141,6 +142,16 @@ interface DentalDashboardProps {
   authBusy: boolean;
   onSignOut: () => void;
   onInstall: () => Promise<string>;
+  /** Navigate to the dedicated Patients page. */
+  onOpenPatients: () => void;
+  /** Navigate to the Patients page with a specific patient selected. */
+  onOpenPatient: (patientId: string) => void;
+  /** A booking request that came from the Patients page. */
+  pendingSchedule: {
+    patientId: string;
+    patient: Patient;
+  } | null;
+  onScheduleHandled: () => void;
 }
 
 type ViewMode = "day" | "week";
@@ -213,6 +224,10 @@ export default function DentalDashboard({
   authBusy,
   onSignOut,
   onInstall,
+  onOpenPatients,
+  onOpenPatient,
+  pendingSchedule,
+  onScheduleHandled,
 }: DentalDashboardProps) {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
@@ -288,6 +303,30 @@ export default function DentalDashboard({
   }, [activeDateKey]);
 
   useEffect(() => subscribeToPatients(setPatients), []);
+
+  // A booking request from the Patients page: drop straight into the create
+  // modal, pre-filled with that patient. Cleared immediately so re-renders
+  // (or going back to Patients) never re-open the modal.
+  useEffect(() => {
+    if (!pendingSchedule) return;
+    const defaultLane =
+      boardLanes.find((lane) => lane !== "walkin") ?? DOCTORS[0].id;
+    setModalState({
+      mode: "create",
+      laneId: defaultLane,
+      date: activeDateKey,
+      start: "09:00",
+      patientId: pendingSchedule.patientId,
+      patientName: pendingSchedule.patient.name,
+      phone: pendingSchedule.patient.phone,
+    });
+    onScheduleHandled();
+  }, [
+    pendingSchedule,
+    activeDateKey,
+    boardLanes,
+    onScheduleHandled,
+  ]);
 
   // Keep the clock fresh so the "now" line does not go stale.
   useEffect(() => {
@@ -902,6 +941,15 @@ export default function DentalDashboard({
             {isToday && <span className="brand-live">Live</span>}
           </div>
           <div className="agenda-topbar-actions">
+            <button
+              className="nav-patients-button"
+              type="button"
+              onClick={onOpenPatients}
+              title="Open the patients page"
+            >
+              <Users size={16} />
+              <span>Patients</span>
+            </button>
             <button
               className={`icon-button ${notificationsReady ? "ready" : ""}`}
               type="button"
@@ -1580,12 +1628,33 @@ export default function DentalDashboard({
       )}
 
       {openPatientId && patients[openPatientId] && (
-        <PatientProfile
-          patientId={openPatientId}
-          patient={patients[openPatientId]}
-          onClose={() => setOpenPatientId(null)}
-          onSchedule={scheduleForPatient}
-        />
+        <div className="modal-backdrop" onClick={() => setOpenPatientId(null)}>
+          <div
+            className="modal-card patient-profile"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <PatientProfilePanel
+              patientId={openPatientId}
+              patient={patients[openPatientId]}
+              onClose={() => setOpenPatientId(null)}
+              onSchedule={scheduleForPatient}
+              onDeleted={() => setOpenPatientId(null)}
+            />
+            <div className="patient-profile-footer">
+              <button
+                type="button"
+                className="modal-cancel"
+                onClick={() => {
+                  const patientId = openPatientId;
+                  setOpenPatientId(null);
+                  onOpenPatient(patientId);
+                }}
+              >
+                Open full profile page
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

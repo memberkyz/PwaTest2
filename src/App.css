@@ -1070,15 +1070,15 @@ footer {
 .agenda-datebar {
   padding: 9px 14px 11px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
   border-top: 1px solid #eef2f0;
 }
 .date-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .date-nav {
   display: flex;
@@ -1960,10 +1960,16 @@ footer {
   opacity: 0.5;
 }
 
-/* Global patient search */
+/* Global patient search
+   Inline with the date controls on desktop (saves a whole row of vertical
+   space); the 700px media query below drops it to its own full-width row. */
 .patient-search-wrap {
   position: relative;
-  width: 100%;
+  width: auto;
+  flex: 1 1 190px;
+  min-width: 0;
+  max-width: 340px;
+  margin-left: auto;
 }
 .patient-search-wrap .agenda-search {
   margin-left: 0;
@@ -2146,6 +2152,19 @@ footer {
   .agenda-datebar {
     padding: 8px 12px 10px;
     gap: 7px;
+    /* Below ~700px the date controls + search no longer fit one line, so
+       stack them again and let the search take its own full-width row. */
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .date-row {
+    flex-wrap: wrap;
+  }
+  .patient-search-wrap {
+    order: 0;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-left: 0;
   }
   .segmented-group button {
     padding: 6px 9px;
@@ -2157,9 +2176,6 @@ footer {
   }
   .today-link {
     padding: 0 8px;
-  }
-  .patient-search-wrap {
-    order: 0;
   }
   .agenda-search input {
     padding: 7px 10px;

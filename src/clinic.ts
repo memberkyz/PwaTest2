@@ -102,6 +102,104 @@ export interface Patient {
   notes: string;
   createdAt: number;
   updatedAt: number;
+  /** Optional front-desk details. All are free text so nothing blocks saving. */
+  email?: string;
+  /** "yyyy-mm-dd" */
+  birthDate?: string;
+  gender?: PatientGender;
+  address?: string;
+  insurance?: string;
+  allergies?: string;
+}
+
+export const PATIENT_GENDERS = [
+  { id: "", label: "Not specified" },
+  { id: "female", label: "Female" },
+  { id: "male", label: "Male" },
+  { id: "other", label: "Other" },
+] as const;
+
+export type PatientGender = (typeof PATIENT_GENDERS)[number]["id"];
+
+export const PATIENT_SORTS = [
+  { id: "name", label: "Name (A–Z)" },
+  { id: "recent", label: "Recently added" },
+  { id: "visits", label: "Most visits" },
+] as const;
+
+export type PatientSort = (typeof PATIENT_SORTS)[number]["id"];
+
+/** Everything the create/edit form can collect about a patient. */
+export interface PatientDraft {
+  name: string;
+  phone: string;
+  email: string;
+  birthDate: string;
+  gender: PatientGender;
+  address: string;
+  insurance: string;
+  allergies: string;
+  notes: string;
+}
+
+export function emptyPatientDraft(): PatientDraft {
+  return {
+    name: "",
+    phone: "",
+    email: "",
+    birthDate: "",
+    gender: "",
+    address: "",
+    insurance: "",
+    allergies: "",
+    notes: "",
+  };
+}
+
+export function patientToDraft(patient: Patient): PatientDraft {
+  return {
+    name: patient.name ?? "",
+    phone: patient.phone ?? "",
+    email: patient.email ?? "",
+    birthDate: patient.birthDate ?? "",
+    gender: patient.gender ?? "",
+    address: patient.address ?? "",
+    insurance: patient.insurance ?? "",
+    allergies: patient.allergies ?? "",
+    notes: patient.notes ?? "",
+  };
+}
+
+/** Loose match used by the patients page search box. */
+export function patientMatchesQuery(patient: Patient, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [
+    patient.name,
+    patient.phone,
+    patient.email,
+    patient.insurance,
+    patient.notes,
+  ].some((value) => (value ?? "").toLowerCase().includes(q));
+}
+
+export function sortPatients(
+  entries: [string, Patient][],
+  visitCounts: Record<string, number>,
+  sort: PatientSort,
+): [string, Patient][] {
+  const list = [...entries];
+  if (sort === "recent") {
+    return list.sort((a, b) => b[1].createdAt - a[1].createdAt);
+  }
+  if (sort === "visits") {
+    return list.sort(
+      ([idA, a], [idB, b]) =>
+        (visitCounts[idB] ?? 0) - (visitCounts[idA] ?? 0) ||
+        a.name.localeCompare(b.name),
+    );
+  }
+  return list.sort(([, a], [, b]) => a.name.localeCompare(b.name));
 }
 
 export interface TreatmentRecord {
@@ -483,13 +581,46 @@ export async function findOrCreatePatient(
 
 export async function updatePatient(
   patientId: string,
-  patch: Partial<Pick<Patient, "name" | "phone" | "notes">>,
+  patch: Partial<Omit<Patient, "createdAt">>,
 ): Promise<void> {
   if (!database) throw new Error("Firebase is not configured");
   await update(ref(database, `patients/${patientId}`), {
     ...patch,
     updatedAt: Date.now(),
   });
+}
+
+/** Creates a brand new patient record and returns its generated id. */
+export async function createPatient(draft: PatientDraft): Promise<string> {
+  if (!database) throw new Error("Firebase is not configured");
+  const name = draft.name.trim();
+  if (!name) throw new Error("A patient name is required");
+  const newRef = push(ref(database, "patients"));
+  const now = Date.now();
+  await set(newRef, {
+    name,
+    phone: draft.phone.trim(),
+    email: draft.email.trim(),
+    birthDate: draft.birthDate,
+    gender: draft.gender,
+    address: draft.address.trim(),
+    insurance: draft.insurance.trim(),
+    allergies: draft.allergies.trim(),
+    notes: draft.notes.trim(),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return newRef.key as string;
+}
+
+/**
+ * Removes a patient and every treatment record under them. Firebase has no
+ * cascading delete, so the records node is cleared explicitly first.
+ */
+export async function deletePatient(patientId: string): Promise<void> {
+  if (!database) throw new Error("Firebase is not configured");
+  await remove(ref(database, `patients/${patientId}/records`));
+  await remove(ref(database, `patients/${patientId}`));
 }
 
 export function subscribeToPatientRecords(
@@ -503,6 +634,40 @@ export function subscribeToPatientRecords(
   return onValue(ref(database, `patients/${patientId}/records`), (snapshot) => {
     onData((snapshot.val() ?? {}) as RecordMap);
   });
+}
+
+export interface PatientStats {
+  /** Number of treatment records (cancelled ones still count as history). */
+  visits: number;
+  /** Most recent record date as "yyyy-mm-dd", or null when there is none. */
+  lastVisit: string | null;
+}
+
+/**
+ * Visit counts for every patient. This reads the whole `patients` tree in one
+ * shot rather than one listener per patient, so it is only called on demand
+ * (when the list is sorted by visits or shows visit badges).
+ */
+export async function fetchAllPatientStats(): Promise<
+  Record<string, PatientStats>
+> {
+  if (!database) return {};
+  const snapshot = await get(ref(database, "patients"));
+  const value = (snapshot.val() ?? {}) as Record<
+    string,
+    { records?: RecordMap }
+  >;
+  const stats: Record<string, PatientStats> = {};
+  for (const [patientId, patient] of Object.entries(value)) {
+    const records = Object.values(patient.records ?? {});
+    const lastVisit = records.reduce<string | null>(
+      (latest, record) =>
+        latest === null || record.date > latest ? record.date : latest,
+      null,
+    );
+    stats[patientId] = { visits: records.length, lastVisit };
+  }
+  return stats;
 }
 
 export async function createTreatmentRecord(

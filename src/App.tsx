@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CalendarDays } from "lucide-react";
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -7,7 +8,20 @@ import {
 } from "firebase/auth";
 import { auth, firebaseConfigured, googleProvider } from "./firebase";
 import DentalDashboard, { type DashboardUser } from "./DentalDashboard";
+import PatientsPage, { type PatientFocus } from "./PatientsPage";
+import { DOCTORS, type Patient } from "./clinic";
 import "./App.css";
+
+export type AppPage = "agenda" | "patients";
+
+/** Handed to the Patients page so it can book straight into the agenda. */
+export interface ScheduleRequest {
+  patientId: string;
+  patient: Patient;
+  date?: string;
+  start?: string;
+  laneId?: (typeof DOCTORS)[number]["id"];
+}
 
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -39,6 +53,23 @@ function App() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
     null,
   );
+  // Which workspace page is open. Both pages read the same Firebase nodes,
+  // so switching between them never loses state.
+  const [page, setPage] = useState<AppPage>("agenda");
+  const [scheduleRequest, setScheduleRequest] =
+    useState<ScheduleRequest | null>(null);
+  // Selecting a patient from the agenda. The token makes each request
+  // distinct so re-picking the same patient still re-focuses it.
+  const [patientsFocus, setPatientsFocus] = useState<PatientFocus | null>(
+    null,
+  );
+  const focusTokenRef = useRef(0);
+
+  const openPatientOnPatientsPage = useCallback((patientId: string) => {
+    focusTokenRef.current += 1;
+    setPatientsFocus({ id: patientId, token: focusTokenRef.current });
+    setPage("patients");
+  }, []);
 
   useEffect(() => {
     if (!auth) return;
@@ -105,6 +136,20 @@ function App() {
     window.addEventListener("beforeinstallprompt", handleInstallPrompt);
     return () =>
       window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+  }, []);
+
+  // These must be declared before the early returns below, otherwise the
+  // hooks order changes between the auth / naming screens and the workspace.
+  const handleSchedule = useCallback(
+    (patientId: string, patient: Patient) => {
+      setScheduleRequest({ patientId, patient });
+      setPage("agenda");
+    },
+    [],
+  );
+
+  const clearScheduleRequest = useCallback(() => {
+    setScheduleRequest(null);
   }, []);
 
   async function installApp(): Promise<string> {
@@ -299,6 +344,25 @@ function App() {
     );
   }
 
+  if (page === "patients") {
+    return (
+      <PatientsPage
+        onSchedule={handleSchedule}
+        focusPatient={patientsFocus}
+        headerAction={
+          <button
+            type="button"
+            className="patients-back-button"
+            onClick={() => setPage("agenda")}
+          >
+            <CalendarDays size={15} />
+            <span>Agenda</span>
+          </button>
+        }
+      />
+    );
+  }
+
   return (
     <DentalDashboard
       user={activeUser}
@@ -306,6 +370,10 @@ function App() {
       authBusy={authBusy}
       onSignOut={signOutOfGoogle}
       onInstall={installApp}
+      onOpenPatients={() => setPage("patients")}
+      onOpenPatient={openPatientOnPatientsPage}
+      pendingSchedule={scheduleRequest}
+      onScheduleHandled={clearScheduleRequest}
     />
   );
 }
