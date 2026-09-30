@@ -18,11 +18,12 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
-  const title = data.title || "Signal Lab test";
+  const title = data.title || "Memo Dental";
   const options = {
-    body: data.body || "A test notification arrived.",
-    icon: "/icon-192.svg",
-    tag: data.eventId ? `signal-${data.eventId}` : undefined,
+    body: data.body || "An appointment changed.",
+    icon: "/icon-192.png",
+    badge: "/favicon-32.png",
+    tag: data.eventId ? `memo-${data.eventId}` : undefined,
     data: { url: data.url || "/", eventId: data.eventId || "unknown" },
   };
   self.registration.showNotification(title, options);

@@ -88,7 +88,9 @@ export default function PatientProfilePanel({
 }: PatientProfilePanelProps) {
   const [records, setRecords] = useState<RecordMap>({});
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<PatientDraft>(() => patientToDraft(patient));
+  const [draft, setDraft] = useState<PatientDraft>(() =>
+    patientToDraft(patient),
+  );
   const [savingDetails, setSavingDetails] = useState(false);
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [recordDate, setRecordDate] = useState(() => dateKey(new Date()));
@@ -287,7 +289,9 @@ export default function PatientProfilePanel({
               <strong>Allergies</strong> {patient.allergies}
             </p>
           )}
-          {patient.notes?.trim() && <p className="profile-notes">{patient.notes}</p>}
+          {patient.notes?.trim() && (
+            <p className="profile-notes">{patient.notes}</p>
+          )}
           {contacts.length === 0 &&
             !patient.birthDate &&
             !patient.notes?.trim() &&
@@ -388,7 +392,9 @@ export default function PatientProfilePanel({
               </div>
               {record.notes && <p className="record-notes">{record.notes}</p>}
               <div className="record-row-side">
-                {record.cancelled && <span className="status-chip">Cancelled</span>}
+                {record.cancelled && (
+                  <span className="status-chip">Cancelled</span>
+                )}
                 <button
                   type="button"
                   className="record-remove"

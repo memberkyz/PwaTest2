@@ -22,7 +22,11 @@ Signal Lab is a small cross-device PWA used to test shared state and web push no
 - Broadcast: `/api/send-notification` uses Firebase Admin SDK and the server-only `FIREBASE_SERVICE_ACCOUNT_JSON` secret.
 - Background notifications: `public/firebase-messaging-sw.js` uses Firebase Messaging compat scripts and displays data-only payloads.
 - Foreground notifications: `src/App.tsx` uses Firebase `onMessage` and calls `showNotification` on the active service worker.
-- PWA metadata: `public/manifest.webmanifest` and `public/icon-192.svg` / `public/icon-512.svg`.
+- PWA metadata: `public/manifest.webmanifest` and `public/icon-192.png` / `public/icon-512.png` (plus `apple-touch-icon.png` and `favicon-32.png`).
+- App name: **Memo Dental** (manifest `short_name` is `MemoDental`). The wordmark is rendered in text, not baked into the logo image.
+- All icon/UI images are generated from the single source `src/assets/logo.png` by `npm run icons` (`scripts/generate-icons.mjs`). Edit that one file and re-run the script; never hand-edit the generated PNGs.
+  - `public/*.png` are the PWA/favicon icons (fetched from `public/`).
+  - `src/assets/logo-ui.png` is the 128px copy **imported into the JS bundle** — the full-size logo must never be imported directly or it ships ~1.7 MB on every page load.
 
 ## Notification contract
 

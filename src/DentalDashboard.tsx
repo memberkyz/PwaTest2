@@ -56,24 +56,7 @@ import {
 } from "./clinic";
 import AppointmentModal, { type AppointmentDraft } from "./AppointmentModal";
 import PatientProfilePanel from "./PatientProfile";
-
-function ToothIcon() {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 3c-2.5 0-4.5 1.4-6 1.4C4.2 4.4 3 5.8 3 8c0 2.6.9 4.8 1.6 7.4.5 1.9.9 4.4 2.3 5.4.8.6 1.4-.6 1.7-1.6.4-1.4.6-3.6 2-3.6h2.8c1.4 0 1.6 2.2 2 3.6.3 1 .9 2.2 1.7 1.6 1.4-1 1.8-3.5 2.3-5.4C20.1 12.8 21 10.6 21 8c0-2.2-1.2-3.6-3-3.6-1.5 0-3.5-1.4-6-1.4Z" />
-    </svg>
-  );
-}
+import logo from "./assets/logo-ui.png";
 
 function whatsappHref(phone: string): string {
   return `https://wa.me/${phone.replace(/[^\d]/g, "")}`;
@@ -321,12 +304,7 @@ export default function DentalDashboard({
       phone: pendingSchedule.patient.phone,
     });
     onScheduleHandled();
-  }, [
-    pendingSchedule,
-    activeDateKey,
-    boardLanes,
-    onScheduleHandled,
-  ]);
+  }, [pendingSchedule, activeDateKey, boardLanes, onScheduleHandled]);
 
   // Keep the clock fresh so the "now" line does not go stale.
   useEffect(() => {
@@ -498,9 +476,10 @@ export default function DentalDashboard({
       const data = payload.data ?? {};
       try {
         const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(data.title ?? "Dental Agenda", {
+        await registration.showNotification(data.title ?? "Memo Dental", {
           body: data.body ?? "An appointment changed.",
-          icon: "/icon-192.svg",
+          icon: "/icon-192.png",
+          badge: "/favicon-32.png",
           tag: data.eventId ? `agenda-${data.eventId}` : undefined,
         });
       } catch {
@@ -934,10 +913,8 @@ export default function DentalDashboard({
       <header className="agenda-header">
         <div className="agenda-topbar">
           <div className="agenda-brand">
-            <span className="agenda-brand-icon">
-              <ToothIcon />
-            </span>
-            <strong>Dental Agenda</strong>
+            <img className="agenda-brand-icon" src={logo} alt="" />
+            <strong>Memo Dental</strong>
             {isToday && <span className="brand-live">Live</span>}
           </div>
           <div className="agenda-topbar-actions">

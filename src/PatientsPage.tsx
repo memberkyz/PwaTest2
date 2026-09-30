@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  UserPlus,
-  Users,
-  X,
-} from "lucide-react";
+import { Search, UserPlus, Users, X } from "lucide-react";
 import {
   PATIENT_SORTS,
   createPatient,
@@ -22,6 +17,7 @@ import {
 } from "./clinic";
 import PatientFields from "./PatientFields";
 import PatientProfilePanel from "./PatientProfile";
+import logo from "./assets/logo-ui.png";
 import "./patients.css";
 
 /** A "select this patient" request. The token makes each request unique. */
@@ -185,10 +181,8 @@ export default function PatientsPage({
     <main className="patients-app">
       <header className="patients-header">
         <div className="patients-title">
-          <span className="patients-title-icon">
-            <Users size={16} />
-          </span>
-          <strong>Patients</strong>
+          <img className="patients-title-icon" src={logo} alt="" />
+          <strong>Memo Dental</strong>
           <span className="patients-count">
             {totalPatients} record{totalPatients === 1 ? "" : "s"}
           </span>
@@ -301,7 +295,9 @@ export default function PatientsPage({
                       <span className="patients-row-info">
                         <strong>{patient.name}</strong>
                         <small>
-                          {patient.phone || patient.email || "No contact on file"}
+                          {patient.phone ||
+                            patient.email ||
+                            "No contact on file"}
                         </small>
                       </span>
                       <span className="patients-row-meta">

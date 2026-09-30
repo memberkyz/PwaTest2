@@ -1,4 +1,4 @@
-## Molar/Care Dental Agenda
+## Memo Dental
 
 A mobile-first dental practice agenda for Maple Clinic with Google sign-in, a daily two-doctor schedule, week view, and patient directory.
 

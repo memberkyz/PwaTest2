@@ -21,9 +21,7 @@ export default function PatientFields({
 
   return (
     <>
-      {showSections && (
-        <p className="field-section-label">Contact</p>
-      )}
+      {showSections && <p className="field-section-label">Contact</p>}
       <div className="modal-row">
         <label className="modal-field">
           <span>Full name</span>

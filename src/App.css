@@ -23,15 +23,17 @@ main {
   align-items: center;
   gap: 10px;
 }
+/* The brand mark is now the app logo (src/assets/logo.png), not a glyph, so
+   the old red circle / arrow styling was removed. `object-fit: cover` keeps
+   the rounded-square artwork filling the box at every size. */
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 27px;
   height: 27px;
-  color: #f3f0e8;
-  background: #ee5538;
-  border-radius: 50%;
-  font-size: 17px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  object-fit: cover;
+  object-position: center;
 }
 .connection {
   display: flex;
@@ -861,14 +863,17 @@ footer {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* Now the app logo image rather than a tooth glyph, so the teal chip behind
+   it was removed. A subtle ring keeps it legible on the white header. */
 .agenda-brand-icon {
-  display: grid;
+  display: block;
   width: 32px;
   height: 32px;
-  place-items: center;
+  flex-shrink: 0;
   border-radius: 9px;
-  background: #17a398;
-  color: #fff;
+  object-fit: cover;
+  object-position: center;
+  box-shadow: 0 1px 3px rgba(20, 32, 28, 0.18);
 }
 .agenda-topbar-actions {
   position: relative;
@@ -1356,6 +1361,13 @@ footer {
   background: #fafcfb;
   cursor: pointer;
   transition: background 140ms ease;
+  /* The day name is the anchor while you scroll a busy column, so pin it.
+     `left: 0` keeps it aligned to its own column as the grid scrolls
+     sideways; `z-index` lifts it above the chips. */
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 2;
 }
 .week-col-head:hover {
   background: #f0f5f3;
@@ -2203,16 +2215,38 @@ footer {
     margin-left: auto;
   }
   /* A 7-column agenda is unreadable on a phone; make it a horizontal strip.
-     Narrower tracks so more of the week is visible without scrolling. */
+
+     CRITICAL (Android): `.week-grid` must be the ONLY scroll container here.
+     It used to be a sibling per-column scroller (`.week-col-body` with
+     `overflow-y: auto`), and a nested scroller swallows the horizontal swipe:
+     the finger lands on a column body, that element is the one that scrolls
+     (it has no horizontal overflow, so nothing happens) and the gesture never
+     reaches the grid. Per CSS, `overflow-x: visible` + `overflow-y: auto`
+     computes `visible` back to `auto`, so you cannot opt out of horizontal
+     capture on a scroll container -- the column scroller has to go.
+
+     Letting the columns size to their content and scrolling the whole grid on
+     both axes is the standard single-scroller pattern: one touch gesture, one
+     scroller, and long days still scroll vertically. */
   .week-grid {
     flex: 1;
     min-height: 0;
     grid-template-columns: repeat(7, minmax(88px, 1fr));
-    overflow-x: auto;
+    align-items: start;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .week-col {
+    /* Columns grow to fit their chips instead of clipping them. */
+    min-height: 100%;
   }
   .week-col-body {
+    flex: none;
     padding: 7px 4px;
     gap: 4px;
+    /* Not a scroller: see the note above. */
+    overflow: visible;
   }
   .week-chip {
     padding: 4px 5px;

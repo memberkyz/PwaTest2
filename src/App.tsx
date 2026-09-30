@@ -10,9 +10,13 @@ import { auth, firebaseConfigured, googleProvider } from "./firebase";
 import DentalDashboard, { type DashboardUser } from "./DentalDashboard";
 import PatientsPage, { type PatientFocus } from "./PatientsPage";
 import { DOCTORS, type Patient } from "./clinic";
+import logo from "./assets/logo-ui.png";
 import "./App.css";
 
 export type AppPage = "agenda" | "patients";
+
+/** Single source of truth for the product name shown in the UI. */
+export const APP_NAME = "Memo Dental";
 
 /** Handed to the Patients page so it can book straight into the agenda. */
 export interface ScheduleRequest {
@@ -33,7 +37,7 @@ function App() {
   const [localPreview, setLocalPreview] = useState(
     () =>
       import.meta.env.DEV &&
-      sessionStorage.getItem("molar-care-preview") === "true",
+      sessionStorage.getItem("memodental-preview") === "true",
   );
   const [authReady, setAuthReady] = useState(() => !auth);
   const [authBusy, setAuthBusy] = useState(false);
@@ -47,7 +51,7 @@ function App() {
   // The naming step is no longer a hard gate: a new user can skip it and still
   // reach the agenda, which is what the clinic actually needs day to day.
   const [skippedDeviceName, setSkippedDeviceName] = useState(
-    () => sessionStorage.getItem("molar-care-name-skipped") === "true",
+    () => sessionStorage.getItem("memodental-name-skipped") === "true",
   );
   const needsDeviceName = !hasNamedDevice && !skippedDeviceName;
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
@@ -60,9 +64,7 @@ function App() {
     useState<ScheduleRequest | null>(null);
   // Selecting a patient from the agenda. The token makes each request
   // distinct so re-picking the same patient still re-focuses it.
-  const [patientsFocus, setPatientsFocus] = useState<PatientFocus | null>(
-    null,
-  );
+  const [patientsFocus, setPatientsFocus] = useState<PatientFocus | null>(null);
   const focusTokenRef = useRef(0);
 
   const openPatientOnPatientsPage = useCallback((patientId: string) => {
@@ -99,7 +101,7 @@ function App() {
 
   async function signOutOfGoogle() {
     if (localPreview) {
-      sessionStorage.removeItem("molar-care-preview");
+      sessionStorage.removeItem("memodental-preview");
       setLocalPreview(false);
       setStatus("Local preview closed");
       return;
@@ -140,13 +142,10 @@ function App() {
 
   // These must be declared before the early returns below, otherwise the
   // hooks order changes between the auth / naming screens and the workspace.
-  const handleSchedule = useCallback(
-    (patientId: string, patient: Patient) => {
-      setScheduleRequest({ patientId, patient });
-      setPage("agenda");
-    },
-    [],
-  );
+  const handleSchedule = useCallback((patientId: string, patient: Patient) => {
+    setScheduleRequest({ patientId, patient });
+    setPage("agenda");
+  }, []);
 
   const clearScheduleRequest = useCallback(() => {
     setScheduleRequest(null);
@@ -170,7 +169,7 @@ function App() {
 
   const previewUser: DashboardUser = {
     displayName: "Dr. Maya Patel",
-    email: "preview@molar-care.local",
+    email: "preview@memodental.local",
     photoURL: null,
   };
   const activeUser: DashboardUser | null =
@@ -179,8 +178,8 @@ function App() {
   if (!authReady) {
     return (
       <main className="auth-loading">
-        <span className="brand-mark">↗</span>
-        <span>Loading Molar/Care</span>
+        <img className="brand-mark" src={logo} alt="" />
+        <span>Loading {APP_NAME}</span>
       </main>
     );
   }
@@ -190,10 +189,8 @@ function App() {
       <main className="auth-shell">
         <section className="auth-visual">
           <div className="auth-brand">
-            <span className="brand-mark">↗</span>
-            <span>
-              molar<span>/</span>care
-            </span>
+            <img className="brand-mark" src={logo} alt="" />
+            <span>memo dental</span>
           </div>
           <div className="signal-orbit" aria-hidden="true">
             <span className="orbit-ring orbit-ring-one" />
@@ -220,7 +217,7 @@ function App() {
             <h2>
               Sign in to
               <br />
-              <em>Molar/Care.</em>
+              <em>Memo Dental.</em>
             </h2>
             <p className="auth-copy">
               Use your Google account to open the clinic agenda and patient
@@ -248,7 +245,7 @@ function App() {
                 className="local-preview-button"
                 type="button"
                 onClick={() => {
-                  sessionStorage.setItem("molar-care-preview", "true");
+                  sessionStorage.setItem("memodental-preview", "true");
                   setLocalPreview(true);
                   setStatus("Local preview mode");
                 }}
@@ -265,7 +262,7 @@ function App() {
           </div>
           <div className="auth-footer">
             <span>HTTPS required</span>
-            <span>Molar/Care · 2026</span>
+            <span>{APP_NAME} · 2026</span>
           </div>
         </section>
       </main>
@@ -277,10 +274,8 @@ function App() {
       <main className="name-shell">
         <div className="name-panel">
           <div className="auth-brand">
-            <span className="brand-mark">↗</span>
-            <span>
-              molar<span>/</span>care
-            </span>
+            <img className="brand-mark" src={logo} alt="" />
+            <span>memo dental</span>
           </div>
           <div className="name-progress">
             <span /> <span className="current" /> <span />
@@ -314,13 +309,13 @@ function App() {
               autoFocus
             />
             <button className="name-submit" type="submit">
-              Enter Molar/Care <span>→</span>
+              Enter {APP_NAME} <span>→</span>
             </button>
             <button
               className="quiet-sign-out"
               type="button"
               onClick={() => {
-                sessionStorage.setItem("molar-care-name-skipped", "true");
+                sessionStorage.setItem("memodental-name-skipped", "true");
                 setSkippedDeviceName(true);
                 setStatus("Skipped device naming");
               }}
