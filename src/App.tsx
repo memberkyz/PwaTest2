@@ -30,6 +30,12 @@ function App() {
   const [hasNamedDevice, setHasNamedDevice] = useState(() =>
     Boolean(localStorage.getItem("signal-lab-device-name")?.trim()),
   );
+  // The naming step is no longer a hard gate: a new user can skip it and still
+  // reach the agenda, which is what the clinic actually needs day to day.
+  const [skippedDeviceName, setSkippedDeviceName] = useState(
+    () => sessionStorage.getItem("molar-care-name-skipped") === "true",
+  );
+  const needsDeviceName = !hasNamedDevice && !skippedDeviceName;
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(
     null,
   );
@@ -221,7 +227,7 @@ function App() {
     );
   }
 
-  if (!hasNamedDevice) {
+  if (needsDeviceName) {
     return (
       <main className="name-shell">
         <div className="name-panel">
@@ -242,7 +248,7 @@ function App() {
           </h1>
           <p className="name-copy">
             This name appears when you send a pulse, so your other devices know
-            where it came from.
+            where it came from. You can skip it and change it later.
           </p>
           <form
             className="name-form"
@@ -265,6 +271,17 @@ function App() {
             <button className="name-submit" type="submit">
               Enter Molar/Care <span>→</span>
             </button>
+            <button
+              className="quiet-sign-out"
+              type="button"
+              onClick={() => {
+                sessionStorage.setItem("molar-care-name-skipped", "true");
+                setSkippedDeviceName(true);
+                setStatus("Skipped device naming");
+              }}
+            >
+              Skip for now
+            </button>
           </form>
           {status !== "Ready for setup" && (
             <p className="auth-status">{status}</p>
@@ -285,7 +302,7 @@ function App() {
   return (
     <DentalDashboard
       user={activeUser}
-      deviceName={deviceName}
+      deviceName={deviceName.trim() || activeUser.displayName || "Front desk"}
       authBusy={authBusy}
       onSignOut={signOutOfGoogle}
       onInstall={installApp}

@@ -1,12 +1,19 @@
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
-import { type Doctor, type DoctorId, type PatientMap } from "./clinic";
+import {
+  APPOINTMENT_COLORS,
+  type AppointmentColor,
+  type Doctor,
+  type LaneId,
+  type PatientMap,
+} from "./clinic";
 
 export interface AppointmentDraft {
-  doctorId: DoctorId;
+  laneId: LaneId;
   patientName: string;
   phone: string;
   treatment: string;
+  color: AppointmentColor;
   date: string;
   start: string;
   duration: number;
@@ -142,9 +149,9 @@ export default function AppointmentModal({
           <label className="modal-field">
             <span>Doctor</span>
             <select
-              value={form.doctorId}
+              value={form.laneId}
               onChange={(event) =>
-                setForm({ ...form, doctorId: event.target.value as DoctorId })
+                setForm({ ...form, laneId: event.target.value as LaneId })
               }
             >
               {doctors.map((doctor) => (
@@ -152,6 +159,7 @@ export default function AppointmentModal({
                   {doctor.name}
                 </option>
               ))}
+              <option value="walkin">Unassigned (walk-in)</option>
             </select>
           </label>
           <label className="modal-field">
@@ -165,6 +173,27 @@ export default function AppointmentModal({
               required
             />
           </label>
+        </div>
+
+        <div className="modal-field">
+          <span>Color</span>
+          <div className="color-picker" role="radiogroup" aria-label="Color">
+            {APPOINTMENT_COLORS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={form.color === option.id}
+                aria-label={option.label}
+                title={option.label}
+                className={`color-swatch color-${option.id} ${
+                  form.color === option.id ? "selected" : ""
+                }`}
+                style={{ backgroundColor: option.hex }}
+                onClick={() => setForm({ ...form, color: option.id })}
+              />
+            ))}
+          </div>
         </div>
 
         <div className="modal-row">

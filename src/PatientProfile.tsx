@@ -7,7 +7,9 @@ import {
   subscribeToPatientRecords,
   updatePatient,
   dateKey,
+  laneMeta,
   type DoctorId,
+  type LaneId,
   type Patient,
   type RecordMap,
 } from "./clinic";
@@ -28,8 +30,8 @@ function formatRecordDate(date: string): string {
   });
 }
 
-function doctorName(id: DoctorId): string {
-  return DOCTORS.find((doctor) => doctor.id === id)?.name ?? id;
+function doctorName(id: LaneId): string {
+  return laneMeta(id).name;
 }
 
 export default function PatientProfile({
